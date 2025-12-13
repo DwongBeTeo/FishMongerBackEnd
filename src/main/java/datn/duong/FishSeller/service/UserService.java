@@ -85,6 +85,7 @@ public class UserService {
                 .fullName(userEntity.getFullName())
                 .phoneNumber(userEntity.getPhoneNumber())
                 .address(userEntity.getAddress())
+                .role(userEntity.getRole().getName())
                 .build();
     }
 

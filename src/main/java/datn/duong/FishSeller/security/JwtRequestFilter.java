@@ -7,7 +7,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -17,13 +19,14 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import datn.duong.FishSeller.util.JwtUtil;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 // Dùng để nhập token vào request trên header Authorization
 @Component
 @RequiredArgsConstructor
 public class JwtRequestFilter extends OncePerRequestFilter {
 
-    private final UserDetailsService userDetailsService;
     private final JwtUtil jwtUtil;
 
     @Override
@@ -33,11 +36,25 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         String jwt = null;
         if(authHeader != null && authHeader.startsWith("Bearer ")){
             jwt = authHeader.substring(7);
-            email = jwtUtil.extractUserName(jwt);
+            try {
+                email = jwtUtil.extractUserName(jwt);
+            } catch (Exception e) {
+                // TODO: handle exception
+                throw new RuntimeException(e);
+            }
         }
         if(email != null && SecurityContextHolder.getContext().getAuthentication() == null){
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(email);
-            if(jwtUtil.validateToken(jwt,userDetails)) {
+            // Thay vì gọi DB, ta kiểm tra token và lấy Role từ token luôn
+            if(jwtUtil.validateTokenSimple(jwt)) {
+                // 1. Lấy Role từ Token
+                String role = jwtUtil.extractRole(jwt);
+                // 2. Tạo Authority (Quyền)
+                List<SimpleGrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(role));
+                // 3. Tạo UserDetails "nhân tạo" (Không cần query DB)
+                // Password để rỗng vì không cần check lại password ở đây
+                UserDetails userDetails = new User(email, "", authorities);
+
+                // 4. Tạo Authentication
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities()
                 );

@@ -24,6 +24,10 @@ public class AppUserDetailsService implements UserDetailsService {
         UserEntity existingUser = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Profile not found with emial: " + email));
 
+        // Kiểm tra role
+        if (existingUser.getRole() == null) {
+            throw new UsernameNotFoundException("Profile not found with emial: " + email);
+        }
         // 1. Lấy tên role từ UserEntity
         String roleName = existingUser.getRole().getName();
         // 2. Tạo GrantedAuthority từ tên role

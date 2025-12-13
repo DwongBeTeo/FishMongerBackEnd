@@ -11,4 +11,7 @@ public interface CategoryRepository extends JpaRepository<CategoryEntity, Long> 
 
     // select count(*) from tbl_categories where name = ?
     Boolean existsByName(String name);
+
+    // select * from tbl_categories where id = ?
+    Optional<CategoryEntity> findById(Long id);
 }
