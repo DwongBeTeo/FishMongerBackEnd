@@ -11,6 +11,9 @@ import datn.duong.FishSeller.entity.ProductEntity;
 
 public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
     // PHẦN 1: DÀNH CHO GUEST/USER (Chỉ hiện Available)
+
+    // find by id and status
+    Optional<ProductEntity> findByIdAndStatus(Long id, String status);
     // 1. Lấy tất cả sản phẩm đang bán (Có phân trang)
     Page<ProductEntity> findByStatus(String status, Pageable pageable);
 

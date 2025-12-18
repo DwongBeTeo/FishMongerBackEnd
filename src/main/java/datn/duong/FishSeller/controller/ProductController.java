@@ -31,8 +31,8 @@ public class ProductController {
     // 2. Xem chi tiết 1 sản phẩm
     // URL: GET /api/v1.0/products/5
     @GetMapping("/{id}")
-    public ResponseEntity<ProductDTO> getProductDetail(@PathVariable Long id) {
-        return ResponseEntity.ok(productService.getProductDetail(id));
+    public ResponseEntity<ProductDTO> getProductDetail(@PathVariable Long id, @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(productService.getProductDetailByStatus(id, "AVAILABLE"));
     }
 
     // 3. Tìm kiếm sản phẩm

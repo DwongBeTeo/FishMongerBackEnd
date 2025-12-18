@@ -45,12 +45,11 @@ public class ProductAdminController {
 
     // 3. Cập nhật sản phẩm (Sửa giá, tồn kho, ẩn/hiện...)
     // URL: PUT /api/v1.0/admin/products/5
-    @PutMapping("/{productId}")
-    public ResponseEntity<ProductDTO> updateProduct(
-            @PathVariable Long ProductId,
-            @RequestBody ProductDTO productDTO
-    ) {
-        ProductDTO updatedProduct = productService.updateProduct(ProductId, productDTO);
+    @PutMapping("/{id}")
+    public ResponseEntity<ProductDTO> updateProduct(@PathVariable Long id,@RequestBody ProductDTO productDTO) {
+        // log để kiểm tra xem có update được ko 
+        System.out.println("DEBUG: Đang update Product ID: " + id + " với Category ID: " + productDTO.getCategoryId());
+        ProductDTO updatedProduct = productService.updateProduct(id, productDTO);
         return ResponseEntity.ok(updatedProduct);
     }
 

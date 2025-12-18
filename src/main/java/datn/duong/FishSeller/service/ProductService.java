@@ -54,9 +54,9 @@ public class ProductService {
     }
 
     // 5. Xem chi tiết 1 sản phẩm
-    public ProductDTO getProductDetail(Long id) {
-        ProductEntity product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Sản phẩm không tồn tại"));
+    public ProductDTO getProductDetailByStatus(Long id, String status) {
+        ProductEntity product = productRepository.findByIdAndStatus(id, "AVAILABLE")
+                .orElseThrow(() -> new RuntimeException("Product not available"));
         return toDTO(product);
     }
 

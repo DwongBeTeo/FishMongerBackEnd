@@ -4,10 +4,11 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "orderItem")
+@Table(name = "order_items")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class OrderItemEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -18,7 +19,7 @@ public class OrderItemEntity {
     private OrderEntity order;
 
     @ManyToOne
-    @JoinColumn(name = "product_id")
+    @JoinColumn(name = "product_id", nullable = false)
     private ProductEntity product;
 
     private Integer quantity;
