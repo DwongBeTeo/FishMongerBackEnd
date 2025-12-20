@@ -39,4 +39,8 @@ public class OrderEntity {
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<OrderItemEntity> orderItems;
+
+    // MỚI: Cờ đánh dấu user yêu cầu hủy
+    @Column(columnDefinition = "boolean default false")
+    private boolean cancellationRequested;
 }

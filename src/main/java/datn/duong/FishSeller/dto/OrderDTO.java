@@ -17,4 +17,5 @@ public class OrderDTO {
     private String shippingAddress;
     private String phoneNumber;
     private List<OrderItemDTO> orderItems;
+    private boolean cancellationRequested; // Để FE hiển thị thông báo "Đang chờ admin duyệt hủy"
 }
