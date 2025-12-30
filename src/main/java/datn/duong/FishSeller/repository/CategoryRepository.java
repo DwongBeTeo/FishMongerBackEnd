@@ -1,5 +1,6 @@
 package datn.duong.FishSeller.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,4 +15,6 @@ public interface CategoryRepository extends JpaRepository<CategoryEntity, Long> 
 
     // select * from tbl_categories where id = ?
     Optional<CategoryEntity> findById(Long id);
+
+    List<CategoryEntity> findAllByParentIsNull();
 }

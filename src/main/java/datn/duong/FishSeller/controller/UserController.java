@@ -23,11 +23,19 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<UserDTO> registerProfile(@RequestBody UserDTO userDTO ){
-        //Chuyển UserDTO thành UserEntity (bằng phương thức toEntity).
-        //Trả về UserDTO (được gán vào registeredProfile).
-        UserDTO registeredProfile = userService.registerUser(userDTO);
-        return ResponseEntity.status(HttpStatus.CREATED).body(registeredProfile);
+    public ResponseEntity<?> registerProfile(@RequestBody UserDTO userDTO ){
+        try {
+            //Chuyển UserDTO thành UserEntity (bằng phương thức toEntity).
+            //Trả về UserDTO (được gán vào registeredProfile).
+            UserDTO registeredProfile = userService.registerUser(userDTO);
+            return ResponseEntity.status(HttpStatus.CREATED).body(registeredProfile);
+            
+        } catch (Exception e) {
+            // TODO: handle exception
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                    "error", e.getMessage()
+            ));
+        }
     }
 
     @GetMapping("/activate")

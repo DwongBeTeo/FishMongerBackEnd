@@ -23,7 +23,7 @@ public class OrderAdminController {
     public ResponseEntity<List<OrderDTO>> getAllOrders() {
         return ResponseEntity.ok(orderService.getAllOrders());
     }
-
+ 
     // 2. Admin cập nhật trạng thái (Dùng để DUYỆT hoặc HỦY đơn khách)
     // PUT: /{orderId}/status?status=CANCELLED
     // status có thể là: SHIPPING, COMPLETED, CANCELLED

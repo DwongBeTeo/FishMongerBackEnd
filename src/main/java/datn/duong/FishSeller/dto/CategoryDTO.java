@@ -1,12 +1,31 @@
 package datn.duong.FishSeller.dto;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import lombok.*;
-@Data
+import lombok.experimental.SuperBuilder;
+
+@Getter
+@Setter
+@ToString
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
-public class CategoryDTO {
-    private Long id;
+@SuperBuilder
+public class CategoryDTO extends BaseDTO {
+    // private Long id;
     private String name;
     private String description;
+    private Long parentId;
+    private String parentName;
+    private Boolean isDeleted;
+    private Long productCount;
+    private List<CategoryDTO> children;
+    // @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    // private LocalDateTime createdDate;
+
+    // @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    // private LocalDateTime updatedDate;
 }

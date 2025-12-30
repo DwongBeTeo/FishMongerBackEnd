@@ -1,13 +1,16 @@
 package datn.duong.FishSeller.dto;
 
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
-@Data
+@Getter
+@Setter
+@ToString
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
-public class UserDTO {
-    private Long id;
+@SuperBuilder
+public class UserDTO extends BaseDTO {
+    // private Long id;
     private String username;
     private String password;
     private String email;

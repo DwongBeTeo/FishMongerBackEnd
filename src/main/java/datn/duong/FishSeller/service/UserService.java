@@ -43,6 +43,14 @@ public class UserService {
 
     // Add methods to handle profile-related operations: crud
     public UserDTO registerUser(UserDTO userDTO) {
+        // kiểm tra xem email này đã được đăng ký chưa
+        if (userRepository.existsByEmail(userDTO.getEmail())) {
+            throw new RuntimeException("Email already exists");
+        }
+        // if (userDTO.getPhoneNumber() != null &&
+        // userRepository.existsByPhoneNumber(userDTO.getPhoneNumber())) {
+        // throw new RuntimeException("Phone number already exists");
+        // }
         // Kiểm tra và tạo role USER nếu chưa có
         RoleEntity defaultRole = roleRepository.findByName("USER")
                 .orElseGet(() -> {
@@ -85,6 +93,8 @@ public class UserService {
                 .fullName(userEntity.getFullName())
                 .phoneNumber(userEntity.getPhoneNumber())
                 .address(userEntity.getAddress())
+                .createdDate(userEntity.getCreatedDate())
+                .updatedDate(userEntity.getUpdatedDate())
                 .role(userEntity.getRole().getName())
                 .build();
     }
@@ -100,7 +110,7 @@ public class UserService {
                 .orElse(false);
     }
 
-    // check user active
+    // check user actived or not
     public boolean isAccountActive(String email) {
         return userRepository.findByEmail(email)
                 .map(UserEntity::getIsActive)
@@ -144,7 +154,8 @@ public class UserService {
                     .authenticate(new UsernamePasswordAuthenticationToken(authDTO.getEmail(), authDTO.getPassword()));
             // generate JWT token
             UserEntity user = userRepository.findByEmail(authDTO.getEmail())
-                    .orElseThrow(() -> new UsernameNotFoundException("Profile not found with email: " + authDTO.getEmail()));
+                    .orElseThrow(
+                            () -> new UsernameNotFoundException("Profile not found with email: " + authDTO.getEmail()));
             // Lấy role name
             String roleName = user.getRole().getName();
             String token = jwtUtil.generateToken(authDTO.getEmail(), roleName);

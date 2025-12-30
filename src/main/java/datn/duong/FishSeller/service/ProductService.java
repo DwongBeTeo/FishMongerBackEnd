@@ -83,30 +83,6 @@ public class ProductService {
     }
 
     // 3. Cập nhật sản phẩm
-    // public ProductDTO updateProduct(Long id, ProductDTO productDTO) {
-    //     ProductEntity existingProduct = productRepository.findById(id)
-    //             .orElseThrow(() -> new RuntimeException("Product not found or not accessible"));
-
-    //     existingProduct.setName(productDTO.getName());
-    //     existingProduct.setPrice(productDTO.getPrice());
-    //     existingProduct.setStockQuantity(productDTO.getStockQuantity());
-    //     existingProduct.setDescription(productDTO.getDescription());
-    //     existingProduct.setImageUrl(productDTO.getImageUrl());
-    //     // Logic Status: Nếu null thì giữ nguyên cái cũ, hoặc cho phép update
-    //     if(productDTO.getStatus() != null) {
-    //         existingProduct.setStatus(productDTO.getStatus()); // Admin có quyền đổi status thành INACTIVE
-    //     }
-
-    //     // Nếu có đổi danh mục
-    //     if (productDTO.getCategoryId() != null && !productDTO.getCategoryId().equals(existingProduct.getCategory().getId())) {
-    //         CategoryEntity category = categoryRepository.findById(productDTO.getCategoryId())
-    //                 .orElseThrow(() -> new RuntimeException("Category Id not found"));
-    //         existingProduct.setCategory(category);
-    //     }
-
-    //     return toDTO(productRepository.save(existingProduct));
-    // }
-
     public ProductDTO updateProduct(Long id, ProductDTO productDTO) {
         ProductEntity existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found or not accessible"));

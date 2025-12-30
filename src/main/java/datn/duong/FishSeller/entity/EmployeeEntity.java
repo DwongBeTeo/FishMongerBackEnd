@@ -5,10 +5,12 @@ import lombok.*;
 
 @Entity
 @Table(name = "employee")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
-public class EmployeeEntity {
+public class EmployeeEntity extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
