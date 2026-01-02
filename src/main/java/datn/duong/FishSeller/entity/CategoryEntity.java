@@ -40,6 +40,18 @@ public class CategoryEntity extends BaseEntity {
     @OneToMany(mappedBy = "parent", cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     private List<CategoryEntity> children;
 
+    @Column(name = "type",nullable = false)
+    private String type;
+
+    @Column(name = "slug", unique = true) // Slug nên là duy nhất để tạo link
+    private String slug;
+
+    @Column(name = "meta_title")
+    private String metaTitle;
+
+    @Column(name = "meta_keyword")
+    private String metaKeyword;
+
     // // 1. Tự động lấy thời gian lúc Insert
     // // updatable = false: Để khi update danh mục, ngày tạo không bị đổi
     // @CreationTimestamp

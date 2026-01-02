@@ -1,6 +1,8 @@
 package datn.duong.FishSeller.service;
 
+import java.text.Normalizer;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.*;
@@ -60,6 +62,13 @@ public class ProductService {
         return toDTO(product);
     }
 
+    // [MỚI] 6. Xem chi tiết theo SLUG (Dùng cho trang chi tiết sản phẩm chuẩn SEO)
+    public ProductDTO getProductDetailBySlug(String slug) {
+        ProductEntity product = productRepository.findBySlugAndStatus(slug, "AVAILABLE")
+                .orElseThrow(() -> new RuntimeException("Product not found (Slug: " + slug + ")"));
+        return toDTO(product);
+    }
+
     // =========================================================================
     // PHẦN 2: ADMIN METHODS (Quản lý - Xem hết, Thêm, Sửa, Xóa)
     // =========================================================================
@@ -73,7 +82,24 @@ public class ProductService {
 
     // 2. Tạo sản phẩm mới
     public ProductDTO createProduct(ProductDTO productDTO) {
+        // 1. Xử lý Slug
+        String slug = productDTO.getSlug();
+        if (slug == null || slug.trim().isEmpty()) {
+            slug = toSlug(productDTO.getName());
+            System.out.println("Debuf: đã tự sinh Slug:" + slug);
+        }else{
+            System.out.println("DEBUG: Dùng slug người dùng gửi: " + slug);
+        }
+        // Check trùng slug
+        if (productRepository.existsBySlug(slug)) {
+            throw new RuntimeException("Slug '" + slug + "' đã tồn tại. Vui lòng đổi tên hoặc sửa slug.");
+        }
+
         ProductEntity product = toEntity(productDTO);
+        product.setSlug(slug);
+        
+        System.out.println("DEBUG: Slug trong Entity trước khi save: " + product.getSlug());
+
         // Mặc định khi tạo mới nếu không gửi status thì set là AVAILABLE
         if (product.getStatus() == null) {
             product.setStatus("AVAILABLE");
@@ -93,6 +119,23 @@ public class ProductService {
         existingProduct.setStockQuantity(productDTO.getStockQuantity());
         existingProduct.setDescription(productDTO.getDescription());
         existingProduct.setImageUrl(productDTO.getImageUrl());
+
+        // Update the status if provided
+        existingProduct.setMetaTitle(productDTO.getMetaTitle());
+        existingProduct.setMetaKeyword(productDTO.getMetaKeyword());
+
+        // Update Slug logic
+        String newSlug = productDTO.getSlug();
+        if (newSlug == null || newSlug.trim().isEmpty()) {
+            newSlug = toSlug(productDTO.getName());
+        }
+        // Nếu slug thay đổi thì mới check trùng
+        if (!newSlug.equals(existingProduct.getSlug())) {
+            if (productRepository.existsBySlugAndIdNot(newSlug, id)) {
+                throw new RuntimeException("Slug '" + newSlug + "' đã tồn tại ở sản phẩm khác.");
+            }
+            existingProduct.setSlug(newSlug);
+        }
 
         // Update the category if provided
         if (productDTO.getCategoryId() != null) {
@@ -118,6 +161,15 @@ public class ProductService {
     // PHẦN 3: HELPER METHODS (MAPPING)
     // =========================================================================
 
+    // Hàm tạo Slug từ tên
+    private String toSlug(String input) {
+        if (input == null) return "";
+        String nowhitespace = input.trim().replaceAll("\\s+", "-");
+        String normalized = Normalizer.normalize(nowhitespace, Normalizer.Form.NFD);
+        Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+        return pattern.matcher(normalized).replaceAll("").toLowerCase();
+        
+    }
     public ProductDTO toDTO(ProductEntity entity) {
         return ProductDTO.builder()
                 .id(entity.getId())
@@ -127,8 +179,13 @@ public class ProductService {
                 .description(entity.getDescription())
                 .imageUrl(entity.getImageUrl())
                 .status(entity.getStatus())
+                .slug(entity.getSlug())
+                .metaTitle(entity.getMetaTitle())
+                .metaKeyword(entity.getMetaKeyword())
                 .categoryId(entity.getCategory() != null ? entity.getCategory().getId() : null)
                 .categoryName(entity.getCategory() != null ? entity.getCategory().getName() : null) // Tiện cho Frontend hiển thị
+                .createdDate(entity.getCreatedDate())
+                .updatedDate(entity.getUpdatedDate())
                 .build();
     }
 
@@ -143,6 +200,9 @@ public class ProductService {
                 .description(dto.getDescription())
                 .imageUrl(dto.getImageUrl())
                 .status(dto.getStatus())
+                // slug set riêngowr logic create/update
+                .metaTitle(dto.getMetaTitle())
+                .metaKeyword(dto.getMetaKeyword())
                 .category(category)
                 .build();
     }

@@ -17,36 +17,37 @@ public class CategoryAdminController {
 
     private final CategoryService categoryService;
 
-    // add category
+    // 1. Tạo danh mục mới
     @PostMapping
     public ResponseEntity<CategoryDTO> createCategory(@RequestBody CategoryDTO categoryDTO) {
         CategoryDTO createdCategory = categoryService.createCategory(categoryDTO);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdCategory);
     }
 
-    // update category
+    // 2. Cập nhật danh mục
     @PutMapping("/{categoryId}")
-    public ResponseEntity<CategoryDTO> updateCategory(@PathVariable Long categoryId,@RequestBody CategoryDTO categoryDTO) {
+    public ResponseEntity<CategoryDTO> updateCategory(@PathVariable Long categoryId, @RequestBody CategoryDTO categoryDTO) {
         CategoryDTO updatedCategory = categoryService.updateCategory(categoryId, categoryDTO);
         return ResponseEntity.ok(updatedCategory);
     }
 
-    // không phép xóa category nếu không sẽ không update dược product
-    // delete category
-    // @DeleteMapping("/{id}")
-    // public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
-    //     categoryService.deleteCategory(id);
-    //     return ResponseEntity.noContent().build();
-    // }
+    // 3. Xóa danh mục (Đã an toàn để mở lại)
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
+        categoryService.deleteCategory(id);
+        return ResponseEntity.noContent().build();
+    }
 
-    // get all categories
+    // 4. Lấy danh sách cho Admin (Dạng bảng phẳng)
+    // Lưu ý: Đảm bảo Service của bạn đã đổi tên hàm thành getAllCategoriesForAdmin như bài trước
     @GetMapping
     public ResponseEntity<List<CategoryDTO>> getAllCategories() {
-        List<CategoryDTO> categories = categoryService.getAllCategories();
+        // Gọi hàm lấy list phẳng (Flat List) để hiển thị lên bảng Admin
+        List<CategoryDTO> categories = categoryService.getAllCategoriesForAdmin();
         return ResponseEntity.ok(categories);
     }
 
-    // get category by id
+    // 5. Lấy chi tiết 1 danh mục
     @GetMapping("/{id}")
     public ResponseEntity<CategoryDTO> getCategoryById(@PathVariable Long id) {
         CategoryDTO category = categoryService.getCategoryById(id);

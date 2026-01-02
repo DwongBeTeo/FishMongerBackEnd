@@ -39,4 +39,9 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
 
     // 7. find by id
     Optional <ProductEntity> findById(Long id);
+
+    // --- THÊM MỚI ---
+    boolean existsBySlug(String slug);
+    boolean existsBySlugAndIdNot(String slug, Long id); // Check trùng khi update
+    Optional<ProductEntity> findBySlugAndStatus(String slug, String status); // Tìm theo slug cho User
 }

@@ -35,6 +35,13 @@ public class ProductController {
         return ResponseEntity.ok(productService.getProductDetailByStatus(id, "AVAILABLE"));
     }
 
+    // [MỚI - RẤT QUAN TRỌNG] 2b. Xem chi tiết theo SLUG
+    // Frontend sẽ gọi: /products/slug/ca-koi-nhat-ban
+    @GetMapping("/slug/{slug}")
+    public ResponseEntity<ProductDTO> getProductDetailBySlug(@PathVariable String slug) {
+        return ResponseEntity.ok(productService.getProductDetailBySlug(slug));
+    }
+    
     // 3. Tìm kiếm sản phẩm
     // URL: GET /api/v1.0/products/search?keyword=koi&page=0&size=10
     @GetMapping("/search")

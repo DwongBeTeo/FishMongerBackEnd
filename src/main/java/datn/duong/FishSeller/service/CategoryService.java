@@ -1,9 +1,13 @@
 package datn.duong.FishSeller.service;
 
+import java.text.Normalizer;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import datn.duong.FishSeller.dto.CategoryDTO;
 import datn.duong.FishSeller.entity.CategoryEntity;
@@ -16,17 +20,26 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
 
     // PHẦN 1: PUBLIC METHODS (Ai cũng dùng được: Khách, User, Admin)
+    // (QUAN TRỌNG: Cần @Transactional cho Lazy Loading)
     // 1. Lấy tất cả danh mục
-    public List<CategoryDTO> getAllCategories() {
-        // Chỉ lấy các danh mục gốc (Cha là null) để đệ quy xuống con
-        // Nếu lấy findAll() thì con sẽ bị lặp lại ở cấp 1
-        List<CategoryEntity> rootCategories = categoryRepository.findAllByParentIsNull();
-        // *Lưu ý: Bạn cần viết thêm hàm findAllByParentIsNull() trong Repository
+    @Transactional(readOnly = true)
+    public List<CategoryDTO> getAllCategoriesForAdmin() {
+        // Lấy tất cả (kể cả cha lẫn con) để hiển thị ra bảng
+        List<CategoryEntity> categories = categoryRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
+        
+        return categories.stream()
+                .map(category -> toDTO(category, false)) // false: Không cần load con (để tránh nặng và lặp)
+                .collect(Collectors.toList());
+    }
 
-        // Nếu bạn muốn lấy list phẳng (admin table) thì dùng findAll() bình thường
-        // List<CategoryEntity> categories = categoryRepository.findAll();
+    // Dùng cho USER/MENU (Hiển thị dạng cây phân cấp)
+    @Transactional(readOnly = true)
+    public List<CategoryDTO> getAllCategoriesForMenu() {
+        // Chỉ lấy gốc, sau đó đệ quy lấy con
+        List<CategoryEntity> rootCategories = categoryRepository.findByParentIsNull();
+        
         return rootCategories.stream()
-                .map(this::toDTO)
+                .map(category -> toDTO(category, true)) // true: Cần load con đệ quy
                 .collect(Collectors.toList());
     }
 
@@ -34,7 +47,7 @@ public class CategoryService {
     public CategoryDTO getCategoryById(Long id) {
         CategoryEntity category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Category not found with id: " + id));
-        return toDTO(category);
+        return toDTO(category,true);
     }
 
     // PHẦN 2: ADMIN METHODS (Chỉ Admin dùng: Thêm, Sửa, Xóa)
@@ -45,7 +58,21 @@ public class CategoryService {
             throw new RuntimeException("Category with name '" + categoryDTO.getName() + "' already exists");
         }
 
+        // Xử lý SLUG (Quan trọng)
+        String slug = categoryDTO.getSlug();
+        if (slug == null || slug.trim().isEmpty()) {
+            // Nếu không nhập slug -> Tự tạo từ Name
+            slug = toSlug(categoryDTO.getName());
+        }
+        
+        // Kiểm tra trùng Slug
+        if (categoryRepository.existsBySlug(slug)) {
+            throw new RuntimeException("Slug '" + slug + "' đã tồn tại, vui lòng chọn tên khác hoặc sửa slug.");
+        }
+
         CategoryEntity newCategory = toEntity(categoryDTO);
+        newCategory.setSlug(slug); // Set slug đã xử lý
+
         // Xử lý logic gán Cha (Parent) - Phần này toEntity không làm được
         if (categoryDTO.getParentId() != null) {
             CategoryEntity parent = categoryRepository.findById(categoryDTO.getParentId())
@@ -53,7 +80,7 @@ public class CategoryService {
             newCategory.setParent(parent);
         }
         CategoryEntity savedCategory = categoryRepository.save(newCategory);
-        return toDTO(savedCategory);
+        return toDTO(savedCategory,false);
     }
 
     // 4. Cập nhật danh mục
@@ -64,6 +91,24 @@ public class CategoryService {
         // Cập nhật thông tin
         existingCategory.setName(categoryDTO.getName());
         existingCategory.setDescription(categoryDTO.getDescription());
+
+        existingCategory.setType(categoryDTO.getType());
+        existingCategory.setMetaTitle(categoryDTO.getMetaTitle());
+        existingCategory.setMetaKeyword(categoryDTO.getMetaKeyword());
+
+        // Xử lý update Slug (Khá phức tạp vì cần check trùng, trừ chính nó ra)
+        String newSlug = categoryDTO.getSlug();
+        if (newSlug == null || newSlug.trim().isEmpty()) {
+             newSlug = toSlug(categoryDTO.getName());
+        }
+        
+        // Nếu slug thay đổi, phải check trùng
+        if (!newSlug.equals(existingCategory.getSlug())) {
+            if (categoryRepository.existsBySlugAndIdNot(newSlug, id)) {
+                throw new RuntimeException("Slug '" + newSlug + "' đã được sử dụng bởi danh mục khác.");
+            }
+            existingCategory.setSlug(newSlug);
+        }
 
         // Update quan hệ Cha - Con (Di chuyển danh mục)
         if (categoryDTO.getParentId() == null) {
@@ -81,7 +126,7 @@ public class CategoryService {
 
         // Lưu lại
         CategoryEntity updatedCategory = categoryRepository.save(existingCategory);
-        return toDTO(updatedCategory);
+        return toDTO(updatedCategory,false);
     }
 
     // 5. Xóa danh mục
@@ -100,11 +145,24 @@ public class CategoryService {
     }
 
     // Helper method
+
+    // Hàm chuyển Tiếng Việt có dấu -> Slug không dấu (VD: "Cá Cảnh" -> "ca-canh")
+    private String toSlug(String input) {
+        if (input == null) return "";
+        String nowhitespace = input.trim().replaceAll("\\s+", "-");
+        String normalized = Normalizer.normalize(nowhitespace, Normalizer.Form.NFD);
+        Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+        return pattern.matcher(normalized).replaceAll("").toLowerCase();
+        
+    }
     // (Chỉ map thông tin cơ bản, KHÔNG map quan hệ cần query DB)
     private CategoryEntity toEntity(CategoryDTO categoryDTO) {
         return CategoryEntity.builder()
                 .name(categoryDTO.getName())
                 .description(categoryDTO.getDescription())
+                .type(categoryDTO.getType())
+                .metaTitle(categoryDTO.getMetaTitle())
+                .metaKeyword(categoryDTO.getMetaKeyword())
                 .isDeleted(false)
                 // Không map parentId ở đây vì Entity cần Object Parent,
                 // việc tìm Parent phải dùng Repository ở Service chính.
@@ -112,28 +170,35 @@ public class CategoryService {
     }
 
     // Phương thức toDTO được sử dụng khi lấy dữ liệu từ Database để trả về cho
-    // người dùng (Frontend/Client).
-    public CategoryDTO toDTO(CategoryEntity entity) {
-        return CategoryDTO.builder()
+    // người dùng (Frontend/Client).Thêm tham số loadChildren để kiểm soát đệ quy
+    public CategoryDTO toDTO(CategoryEntity entity, boolean loadChildren) {
+        CategoryDTO.CategoryDTOBuilder builder = CategoryDTO.builder()
                 .id(entity.getId())
-                .createdDate(entity.getCreatedDate())
-                .updatedDate(entity.getUpdatedDate())
                 .name(entity.getName())
                 .description(entity.getDescription())
+                .createdDate(entity.getCreatedDate())
+                .updatedDate(entity.getUpdatedDate())
                 .isDeleted(entity.getIsDeleted())
-                // 1. Xử lý Parent (Lấy ID và Tên cha)
+                .type(entity.getType())
+                .slug(entity.getSlug())
+                .metaTitle(entity.getMetaTitle())
+                .metaKeyword(entity.getMetaKeyword())
+                // Lấy thông tin cha (để hiển thị trên bảng Admin)
                 .parentId(entity.getParent() != null ? entity.getParent().getId() : null)
-                .parentName(entity.getParent() != null ? entity.getParent().getName() : null)
+                .parentName(entity.getParent() != null ? entity.getParent().getName() : null);
 
-                // 2. Xử lý Product Count (Dùng .size() là cách đơn giản nhất)
-                // Lưu ý: Cần @Transactional ở method gọi hàm này để fetch data từ DB
-                .productCount(entity.getProducts() != null ? (long) entity.getProducts().size() : 0L)
+        // Map số lượng sản phẩm (Cẩn thận Lazy Loading -> Cần @Transactional ở hàm gọi)
+        if (entity.getProducts() != null) {
+            builder.productCount((long) entity.getProducts().size());
+        }
 
-                // 3. Xử lý Children (Đệ quy)
-                // Dùng stream gọi lại chính hàm toDTO này cho các con
-                .children(entity.getChildren() != null
-                        ? entity.getChildren().stream().map(this::toDTO).collect(Collectors.toList())
-                        : null)
-                .build();
+        // Chỉ load con nếu cần (Menu cần, Bảng Admin không cần)
+        if (loadChildren && entity.getChildren() != null) {
+            builder.children(entity.getChildren().stream()
+                    .map(child -> toDTO(child, true)) // Đệ quy tiếp
+                    .collect(Collectors.toList()));
+        }
+
+        return builder.build();
     }
 }
