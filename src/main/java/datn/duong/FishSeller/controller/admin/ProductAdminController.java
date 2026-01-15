@@ -25,14 +25,22 @@ public class ProductAdminController {
 
     private final ProductService productService;
 
-    // 1. Lấy tất cả sản phẩm (Cho trang quản lý admin - xem cả hàng ẩn)
-    // URL: GET /api/v1.0/admin/products
+    // 1. Lấy tất cả sản phẩm (Cho trang quản lý admin - xem cả hàng ẩn, Search + Filter)
+    // URL: GET /admin/products?page=0&size=10&keyword=ca&categoryId=1&status=AVAILABLE
     @GetMapping
     public ResponseEntity<Page<ProductDTO>> getAllProductsForAdmin(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        return ResponseEntity.ok(productService.getAllProductsForAdmin(page, size));
+        // SECURITY CHECK: không cho phép lấy quá 10 sản phẩm(tránh bị tấn công thông qua postman)
+        if (size > 10) {
+            size = 10;
+        }
+        Page<ProductDTO> result = productService.getAllProductsForAdmin(keyword, categoryId, status, page, size);
+        return ResponseEntity.ok(result);
     }
 
     // 2. Thêm mới sản phẩm

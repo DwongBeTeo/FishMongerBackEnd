@@ -3,6 +3,7 @@ package datn.duong.FishSeller.service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Sort;
@@ -19,6 +20,7 @@ import datn.duong.FishSeller.entity.OrderItemEntity;
 import datn.duong.FishSeller.entity.ProductEntity;
 import datn.duong.FishSeller.entity.UserEntity;
 import datn.duong.FishSeller.enums.OrderStatus;
+import datn.duong.FishSeller.enums.PaymentStatus;
 import datn.duong.FishSeller.repository.CartRepository;
 import datn.duong.FishSeller.repository.OrderRepository;
 import datn.duong.FishSeller.repository.ProductRepository;
@@ -33,15 +35,21 @@ private final OrderRepository orderRepository;
     private final ProductRepository productRepository; // Cần để trừ tồn kho
     private final UserRepository userRepository;
     private final UserService userService;
+    private final EmailService emailService;
 
     // ========================================================================
     // PHẦN DÀNH CHO ADMIN
     // ========================================================================
 
     // 1. ADMIN: Lấy tất cả đơn hàng trong hệ thống
-    public List<OrderDTO> getAllOrders() {
-        // findAll() lấy tất cả không phân biệt user
-        List<OrderEntity> orders = orderRepository.findAll(Sort.by(Sort.Direction.DESC, "orderDate"));
+    public List<OrderDTO> getAllOrders(String keyword) {
+        List<OrderEntity> orders;
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            orders = orderRepository.findByUser_EmailContainingIgnoreCaseOrderByOrderDateDesc(keyword.trim());
+        }else{
+            // findAll() lấy tất cả không phân biệt user
+            orders = orderRepository.findAll(Sort.by(Sort.Direction.DESC, "orderDate"));
+        }
         
         return orders.stream()
                 .map(this::toDTO)
@@ -64,13 +72,33 @@ private final OrderRepository orderRepository;
         if (newStatus == OrderStatus.CANCELLED) {
             restoreStock(order);
             order.setCancellationRequested(false); // Reset cờ yêu cầu (nếu có) vì đơn đã hủy rồi
+            // Gửi email thông báo
+            sendNotificationToUser(
+                order.getUser(), 
+                "Thông báo hủy đơn hàng #" + order.getId(),
+                "Đơn hàng <b>#" + order.getId() + "</b> đã bị hủy bởi Admin vì lý do hết hàng hoặc sự cố vận hành."
+            );
         }
 
         // LOGIC 2: Nếu Admin chuyển sang trạng thái khác (VD: SHIPPING)
         // Mà khách đang yêu cầu hủy -> Thì coi như Admin TỪ CHỐI yêu cầu đó
-        if(newStatus != OrderStatus.CANCELLED && order.isCancellationRequested()) {
-            order.setCancellationRequested(false);
-            // (Ở đây bạn có thể thêm logic gửi noti báo khách là: Đơn vẫn được giao nhé)
+        // if(newStatus != OrderStatus.CANCELLED && order.isCancellationRequested()) {
+        //     order.setCancellationRequested(false);
+            // // Gửi email từ chối
+            // sendNotificationToUser(
+            //     order.getUser(),
+            //     "Yêu cầu hủy đơn hàng #" + order.getId() + " bị từ chối",
+            //     "Yêu cầu hủy đơn hàng <b>#" + order.getId() + "</b> của bạn đã bị TỪ CHỐI. Đơn hàng đang tiếp tục được xử lý. Nếu có vấn đề gì vui lòng liên hệ qua số điện thoại (" + newStatus.getDisplayName() + ")."
+            // );
+        // }
+
+        // LOGIC 3: Thông báo khi đơn hàng Giao thành công 
+        if (newStatus == OrderStatus.COMPLETED) {
+             sendNotificationToUser(
+                order.getUser(),
+                "Đơn hàng #" + order.getId() + " đã hoàn thành",
+                "Cảm ơn bạn đã mua sắm tại Cá Cảnh Shop. Đơn hàng <b>#" + order.getId() + "</b> đã được giao thành công."
+            );
         }
 
         order.setStatus(newStatus);
@@ -80,7 +108,7 @@ private final OrderRepository orderRepository;
 
     // 3. ADMIN:XỬ LÝ YÊU CẦU HỦY (DUYỆT HOẶC TỪ CHỐI)
     @Transactional
-    public OrderDTO handleCancellationRequest(Long orderId, boolean approve) {
+    public OrderDTO handleCancellationRequest(Long orderId, boolean approve, String reason) {
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
@@ -92,16 +120,37 @@ private final OrderRepository orderRepository;
             // ADMIN ĐỒNG Ý HỦY
             restoreStock(order); // Hoàn kho
             order.setStatus(OrderStatus.CANCELLED);
+            // // Gửi mail đồng ý
+            // sendNotificationToUser(
+            //     order.getUser(),
+            //     "Xác nhận hủy đơn hàng #" + order.getId(),
+            //     "Yêu cầu hủy đơn hàng <b>#" + order.getId() + "</b> của bạn đã được CHẤP NHẬN."
+            // );
         } else {
-            // ADMIN TỪ CHỐI HỦY (Ví dụ: Shipper đã đi quá xa)
-            // Chỉ tắt cờ yêu cầu, giữ nguyên trạng thái cũ (SHIPPING/PREPARING)
-            // Có thể thêm logic gửi thông báo cho user lý do từ chối ở đây
+            // B. ADMIN TỪ CHỐI
+            String msg = "Yêu cầu hủy đơn hàng <b>#" + order.getId() + "</b> đã bị TỪ CHỐI.";
+            if (reason != null && !reason.isEmpty()) {
+                msg += "<br/><b>Lý do:</b> " + reason;
+            }
+            // Gửi mail từ chối kèm lý do
+            sendNotificationToUser(
+                order.getUser(),
+                "Yêu cầu hủy đơn hàng #" + order.getId() + " bị từ chối",
+                msg
+            );
         }
 
         // Dù đồng ý hay từ chối thì cũng reset cờ này về false (đã xử lý xong)
         order.setCancellationRequested(false); 
         
         return toDTO(orderRepository.save(order));
+    }
+
+    // 4: ADMIN: xem chi tiết đơn hàng
+    public OrderDTO getOrderByIdForAdmin(Long orderId) {
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        return toDTO(order);
     }
 
     // ========================================================================
@@ -127,6 +176,9 @@ private final OrderRepository orderRepository;
                 .status(OrderStatus.PENDING) // Mặc định là Chờ xử lý
                 .shippingAddress(request.getShippingAddress())
                 .phoneNumber(request.getPhoneNumber())
+                .paymentMethod(request.getPaymentMethod()) 
+                // Mặc định mới đặt là Chưa thanh toán (kể cả Banking cũng cần chờ check)
+                .paymentStatus(PaymentStatus.UNPAID)
                 .totalAmount(0.0) // Sẽ tính lại bên dưới
                 .build();
 
@@ -184,37 +236,22 @@ private final OrderRepository orderRepository;
 
         // 2.2. Kiểm tra trạng thái hợp lệ để hủy
         // Ví dụ: Chỉ cho hủy khi đơn hàng đang Chờ xử lý.
-        if (order.getUser().getId().equals(currentUser.getId())) {
+        if (!order.getUser().getId().equals(currentUser.getId())) {
             throw new RuntimeException("Bạn không có quyền để hủy đơn hàng này!");
         }
 
         //Case1: pending cho phép hủy luôn 
-        if (order.getStatus() == OrderStatus.PENDING) {
-            restoreStock(order);
-            order.setStatus(OrderStatus.CANCELLED);
-            return toDTO(orderRepository.save(order));
-        }
+        // if (order.getStatus() == OrderStatus.PENDING) {
+        //     restoreStock(order);
+        //     order.setStatus(OrderStatus.CANCELLED);
+        //     return toDTO(orderRepository.save(order));
+        // }
 
         // Case2: Đang chuẩn bị hoặc đang giao -> Gửi yêu cầu hủy
-        if(order.getStatus() == OrderStatus.SHIPPING || order.getStatus() == OrderStatus.SHIPPING) {
+        if(order.getStatus() == OrderStatus.PREPARING || order.getStatus() == OrderStatus.SHIPPING || order.getStatus() == OrderStatus.PENDING) {
             order.setCancellationRequested(true);// Bật cờ
             return toDTO(orderRepository.save(order));
         }
-
-        // 2.3. Hoàn lại tồn kho (Logic quan trọng nhất)
-        // List<OrderItemEntity> orderItems = order.getOrderItems();
-        // for (OrderItemEntity item : orderItems) {
-        //     ProductEntity product = item.getProduct();
-            
-        //     // Cộng lại số lượng đã mua vào kho
-        //     int currentStock = product.getStockQuantity();
-        //     int quantityToRestore = item.getQuantity();
-        //     product.setStockQuantity(currentStock + quantityToRestore);
-
-        //     // Lưu lại Product (Nếu dùng Transactional, Hibernate sẽ tự dirty check, 
-        //     // nhưng gọi save rõ ràng cũng tốt để dễ debug)
-        //     productRepository.save(product);
-        // }
         restoreStock(order);
 
         //Case 3: Đã xong hoặc đã hủy -> Lỗi
@@ -263,6 +300,33 @@ private final OrderRepository orderRepository;
         }
     }
 
+    // --- HÀM GỬI EMAIL THỰC TẾ ---
+    private void sendNotificationToUser(UserEntity user, String subject, String messageContent) {
+        if (user.getEmail() == null || user.getEmail().isEmpty()) {
+            return; // Bỏ qua nếu user không có email
+        }
+
+        // Tạo nội dung HTML đơn giản
+        String htmlBody = "" +
+                "<div style='font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 5px;'>" +
+                "   <h2 style='color: #0891b2;'>Cá Cảnh Shop Thông Báo</h2>" +
+                "   <p>Xin chào <b>" + user.getUsername() + "</b>,</p>" +
+                "   <p>" + messageContent + "</p>" +
+                "   <hr style='border: 0; border-top: 1px solid #eee;' />" +
+                "   <p style='font-size: 12px; color: #777;'>Đây là email tự động, vui lòng không trả lời email này.</p>" +
+                "</div>";
+
+        // QUAN TRỌNG: Chạy Async để không làm Admin phải chờ gửi mail xong mới thấy phản hồi
+        CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendEmail(user.getEmail(), subject, htmlBody);
+            } catch (Exception e) {
+                // Chỉ log lỗi, không throw exception làm ảnh hưởng luồng chính
+                System.err.println("Lỗi gửi email background: " + e.getMessage());
+            }
+        });
+    }
+
     // Chuyển từ Entity sang DTO
     public OrderDTO toDTO(OrderEntity entity) {
         if (entity == null) return null;
@@ -281,11 +345,14 @@ private final OrderRepository orderRepository;
         return OrderDTO.builder()
                 .id(entity.getId())
                 .userId(entity.getUser().getId())
+                .userEmail(entity.getUser().getEmail())
                 .orderDate(entity.getOrderDate())
                 .status(entity.getStatus().name())
                 .totalAmount(entity.getTotalAmount())
                 .shippingAddress(entity.getShippingAddress())
                 .phoneNumber(entity.getPhoneNumber())
+                .paymentMethod(entity.getPaymentMethod() != null ? entity.getPaymentMethod().name() : null)
+                .paymentStatus(entity.getPaymentStatus() != null ? entity.getPaymentStatus().name() : null)
                 .orderItems(itemDTOs)
                 .cancellationRequested(entity.isCancellationRequested())
                 .build();

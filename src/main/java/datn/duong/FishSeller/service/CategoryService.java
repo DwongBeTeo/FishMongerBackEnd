@@ -23,21 +23,28 @@ public class CategoryService {
     // (QUAN TRỌNG: Cần @Transactional cho Lazy Loading)
     // 1. Lấy tất cả danh mục
     @Transactional(readOnly = true)
-    public List<CategoryDTO> getAllCategoriesForAdmin() {
-        // Lấy tất cả (kể cả cha lẫn con) để hiển thị ra bảng
-        List<CategoryEntity> categories = categoryRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
-        
+    public List<CategoryDTO> getAllCategoriesForAdmin(String keyword) {
+        List<CategoryEntity> categories;
+
+        // Nếu có từ khóa tìm kiếm -> Gọi hàm tìm kiếm Native (tìm cả đã xóa)
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            categories = categoryRepository.searchForAdminRaw(keyword.trim());
+        } 
+        // Nếu không có từ khóa -> Gọi hàm findAll Native (lấy cả đã xóa)
+        else {
+            categories = categoryRepository.findAllForAdminRaw();
+        }
+
         return categories.stream()
-                .map(category -> toDTO(category, false)) // false: Không cần load con (để tránh nặng và lặp)
+                .map(category -> toDTO(category, false)) 
                 .collect(Collectors.toList());
     }
 
     // Dùng cho USER/MENU (Hiển thị dạng cây phân cấp)
     @Transactional(readOnly = true)
-    public List<CategoryDTO> getAllCategoriesForMenu() {
+    public List<CategoryDTO> getAllCategoriesForMenu(String type) {
         // Chỉ lấy gốc, sau đó đệ quy lấy con
-        List<CategoryEntity> rootCategories = categoryRepository.findByParentIsNull();
-        
+        List<CategoryEntity> rootCategories = categoryRepository.findByParentIsNotNullAndType(type);
         return rootCategories.stream()
                 .map(category -> toDTO(category, true)) // true: Cần load con đệ quy
                 .collect(Collectors.toList());
@@ -129,7 +136,7 @@ public class CategoryService {
         return toDTO(updatedCategory,false);
     }
 
-    // 5. Xóa danh mục
+    // 5. Xóa danh mục(xóa mềm)
     public void deleteCategory(Long id) {
         CategoryEntity category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Category not found with id: " + id));
@@ -142,6 +149,33 @@ public class CategoryService {
             throw new RuntimeException("Không thể xóa danh mục vì vẫn còn sản phẩm!");
         }
         categoryRepository.deleteById(category.getId());
+    }
+
+    // 6. khôi phục danh mục
+    public void restoreCategory(Long id) {
+        //Tìm danh mục (Bắt buộc dùng hàm native query vừa viết ở trên)
+        CategoryEntity category = categoryRepository.findByIdIncludingDeleted(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục với id: " + id));
+
+        //Kiểm tra nếu chưa xóa thì báo lỗi hoặc return luôn
+        if (!category.getIsDeleted()) {
+            throw new RuntimeException("Danh mục này chưa bị xóa, không cần khôi phục!");
+        }
+
+        //Logic nghiệp vụ nâng cao - Kiểm tra cha
+        // Nếu danh mục này có cha, và cha đang bị xóa, thì không thể khôi phục con "mồ côi"
+        if (category.getParent() != null) {
+            CategoryEntity parent = categoryRepository.findByIdIncludingDeleted(category.getParent().getId())
+                    .orElse(null);
+            
+            if (parent != null && parent.getIsDeleted()) {
+                throw new RuntimeException("Không thể khôi phục danh mục vì danh mục cha đang bị xóa. Vui lòng khôi phục cha trước!");
+            }
+        }
+
+        //Thực hiện khôi phục
+        category.setIsDeleted(false);
+        categoryRepository.save(category);
     }
 
     // Helper method

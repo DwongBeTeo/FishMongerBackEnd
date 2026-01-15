@@ -20,8 +20,10 @@ public class OrderAdminController {
     // 1. Xem tất cả đơn hàng
     // GET:
     @GetMapping
-    public ResponseEntity<List<OrderDTO>> getAllOrders() {
-        return ResponseEntity.ok(orderService.getAllOrders());
+    public ResponseEntity<List<OrderDTO>> getAllOrders(
+        @RequestParam(required = false) String keyword
+    ) {
+        return ResponseEntity.ok(orderService.getAllOrders(keyword));
     }
  
     // 2. Admin cập nhật trạng thái (Dùng để DUYỆT hoặc HỦY đơn khách)
@@ -35,11 +37,21 @@ public class OrderAdminController {
     }
 
     // 3.Admin Duyệt/Từ chối yêu cầu hủy
-    // PUT: /api/orders/admin/{orderId}/review-cancel?approve=true (hoặc false)
+    // PUT: /api/orders/admin/{orderId}/review-cancel?approve=true
+    // Hoặc: /api/admin/orders/{orderId}/review-cancel?approve=false&reason=Hang da giao cho shipper
     @PutMapping("{orderId}/review-cancel")
     public ResponseEntity<OrderDTO> reviewCancellation(
             @PathVariable Long orderId,
-            @RequestParam boolean approve) {
-        return ResponseEntity.ok(orderService.handleCancellationRequest(orderId, approve));
+            @RequestParam boolean approve,
+            @RequestParam(required = false) String reason // Lý do từ chối (nếu có)
+        ) {
+        return ResponseEntity.ok(orderService.handleCancellationRequest(orderId, approve, reason));
+    }
+
+    // 4. Xem chi tiết đơn hàng (Dành cho Admin)
+    // GET: /api/v1.0/admin/orders/{orderId}
+    @GetMapping("/{orderId}")
+    public ResponseEntity<OrderDTO> getOrderByIdForAdmin(@PathVariable Long orderId) {
+        return ResponseEntity.ok(orderService.getOrderByIdForAdmin(orderId));
     }
 }

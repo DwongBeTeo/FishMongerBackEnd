@@ -38,12 +38,18 @@ public class CategoryAdminController {
         return ResponseEntity.noContent().build();
     }
 
+    // khôi phục danh mục
+    @PutMapping("/{id}/restore")
+    public ResponseEntity<?> restoreCategory(@PathVariable Long id) {
+        categoryService.restoreCategory(id);
+        return ResponseEntity.ok("Restored successfully");
+    }
+
     // 4. Lấy danh sách cho Admin (Dạng bảng phẳng)
-    // Lưu ý: Đảm bảo Service của bạn đã đổi tên hàm thành getAllCategoriesForAdmin như bài trước
     @GetMapping
-    public ResponseEntity<List<CategoryDTO>> getAllCategories() {
+    public ResponseEntity<List<CategoryDTO>> getAllCategories(@RequestParam(required = false) String keyword) {
         // Gọi hàm lấy list phẳng (Flat List) để hiển thị lên bảng Admin
-        List<CategoryDTO> categories = categoryService.getAllCategoriesForAdmin();
+        List<CategoryDTO> categories = categoryService.getAllCategoriesForAdmin(keyword);
         return ResponseEntity.ok(categories);
     }
 

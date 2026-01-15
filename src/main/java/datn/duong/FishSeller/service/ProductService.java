@@ -73,11 +73,24 @@ public class ProductService {
     // PHẦN 2: ADMIN METHODS (Quản lý - Xem hết, Thêm, Sửa, Xóa)
     // =========================================================================
 
-    // 1. Lấy tất cả sản phẩm (Kể cả ẩn/hết hàng) để Admin quản lý
-    public Page<ProductDTO> getAllProductsForAdmin(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        return productRepository.findAll(pageable)
-                .map(this::toDTO);
+    // 1. Lấy tất cả sản phẩm (Kể cả ẩn/hết hàng/Có lọc + Phân trang) để Admin quản lý
+    public Page<ProductDTO> getAllProductsForAdmin(
+            String keyword, 
+            Long categoryId, 
+            String status, 
+            int page, 
+            int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending()); // Mặc định sắp xếp mới nhất
+        
+        return productRepository.searchAndFilterAdmin(
+                keyword, 
+                categoryId, 
+                status, 
+                null, // minPrice (để null nếu Admin chưa cần lọc giá)
+                null, // maxPrice
+                pageable
+        ).map(this::toDTO);
     }
 
     // 2. Tạo sản phẩm mới
@@ -104,6 +117,11 @@ public class ProductService {
         if (product.getStatus() == null) {
             product.setStatus("AVAILABLE");
         }
+
+        // khi sản phẩm về 0 thì cập nhật status thành "OUT_OF_STOCK"
+        if (product.getStockQuantity() == 0) {
+            product.setStatus("OUT_OF_STOCK");
+        }
         ProductEntity savedProduct = productRepository.save(product);
         return toDTO(savedProduct);
     }
@@ -119,6 +137,22 @@ public class ProductService {
         existingProduct.setStockQuantity(productDTO.getStockQuantity());
         existingProduct.setDescription(productDTO.getDescription());
         existingProduct.setImageUrl(productDTO.getImageUrl());
+
+        if (existingProduct.getStockQuantity() <= 0) {
+            // Ưu tiên cao nhất: Hết hàng là OUT_OF_STOCK
+            existingProduct.setStatus("OUT_OF_STOCK");
+        } else {
+            // Còn hàng -> Kiểm tra xem người dùng có gửi status mới không
+            if (productDTO.getStatus() != null) {
+                existingProduct.setStatus(productDTO.getStatus());
+            } else {
+                // Không gửi status -> Nếu status chưa có thì set AVAILABLE
+                if (existingProduct.getStatus() == null) {
+                    existingProduct.setStatus("AVAILABLE");
+                }
+                // Nếu đã có status cũ thì giữ nguyên (không làm gì cả)
+            }
+        }
 
         // Update the status if provided
         existingProduct.setMetaTitle(productDTO.getMetaTitle());

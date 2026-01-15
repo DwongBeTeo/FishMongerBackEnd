@@ -37,7 +37,7 @@ public class CartService {
     //     return toDTO(cart);
     // }
 
-    // 1. Lấy giỏ hàng của user hiện tạitại
+    // 1. Lấy giỏ hàng của user hiện tại
     @Transactional(readOnly = true) // Tối ưu hiệu suất cho việc đọc dữ liệu
     public CartDTO getMyCart() {
         // Lấy user đang đăng nhập

@@ -11,6 +11,7 @@ import lombok.*;
 public class OrderDTO {
     private Long id;
     private Long userId;
+    private String userEmail;
     private LocalDateTime orderDate;
     private Double totalAmount;
     private String status;
@@ -18,4 +19,6 @@ public class OrderDTO {
     private String phoneNumber;
     private List<OrderItemDTO> orderItems;
     private boolean cancellationRequested; // Để FE hiển thị thông báo "Đang chờ admin duyệt hủy"
+    private String paymentMethod;
+    private String paymentStatus;
 }

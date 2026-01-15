@@ -6,6 +6,8 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import datn.duong.FishSeller.entity.ProductEntity;
 
@@ -39,6 +41,22 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
 
     // 7. find by id
     Optional <ProductEntity> findById(Long id);
+
+    // 8. Hàm này xử lý tất cả các bộ lọc của Admin cùng lúc
+    @Query("SELECT p FROM ProductEntity p WHERE " +
+           "(:keyword IS NULL OR :keyword = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND " +
+           "(:categoryId IS NULL OR p.category.id = :categoryId) AND " +
+           "(:status IS NULL OR :status = '' OR p.status = :status) AND " +
+           "(:minPrice IS NULL OR p.price >= :minPrice) AND " +
+           "(:maxPrice IS NULL OR p.price <= :maxPrice)")
+    Page<ProductEntity> searchAndFilterAdmin(
+            @Param("keyword") String keyword,
+            @Param("categoryId") Long categoryId,
+            @Param("status") String status,
+            @Param("minPrice") Double minPrice,
+            @Param("maxPrice") Double maxPrice,
+            Pageable pageable
+    );
 
     // --- THÊM MỚI ---
     boolean existsBySlug(String slug);

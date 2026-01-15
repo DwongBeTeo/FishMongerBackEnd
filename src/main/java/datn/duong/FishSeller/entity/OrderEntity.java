@@ -1,6 +1,8 @@
 package datn.duong.FishSeller.entity;
 
 import datn.duong.FishSeller.enums.OrderStatus;
+import datn.duong.FishSeller.enums.PaymentMethod;
+import datn.duong.FishSeller.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -36,6 +38,14 @@ public class OrderEntity {
 
     @Enumerated(EnumType.STRING)
     private OrderStatus status;// ENUM: PENDING, SHIPPING, COMPLETED, CANCELLED
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method") // Nên đặt tên rõ ràng trong DB
+    private PaymentMethod paymentMethod; // COD, BANKING
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status")
+    private PaymentStatus paymentStatus; // UNPAID, PAID
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<OrderItemEntity> orderItems;
