@@ -1,7 +1,9 @@
 package datn.duong.FishSeller.service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -71,6 +73,17 @@ public class UserService {
         emailService.sendEmail(newUser.getEmail(), subject, body);
         log.info("Already send activate link to {}", newUser.getEmail());
         return toDTO(newUser);
+    }
+
+    // --- MỚI: HÀM LẤY DANH SÁCH USER KHẢ DỤNG CHO ADMIN ---
+    public List<UserDTO> getAvailableUsersForEmployee() {
+        // Gọi repository
+        List<UserEntity> users = userRepository.findAvailableUsersForEmployee();
+        
+        // Convert sang DTO để trả về frontend (chỉ cần id, username, email, fullname)
+        return users.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 
     // helper method

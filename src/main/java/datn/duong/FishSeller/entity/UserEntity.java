@@ -1,5 +1,10 @@
 package datn.duong.FishSeller.entity;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -18,20 +23,16 @@ import lombok.experimental.SuperBuilder;
 // nếu không sẽ bị lỗi StackOverflowError (tràn bộ nhớ) khi in log.
 public class UserEntity extends BaseEntity {
 
-    // @Id
-    // @GeneratedValue(strategy = GenerationType.IDENTITY)
-    // private Long id;
-
     @Column(nullable = false)
     private String username;
 
     @Column(nullable = false)
     private String password; // Lưu chuỗi hash
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String email;
 
-    @Column() // Mapping tên biến camelCase sang snake_case trong DB
+    @Column(name = "full_name") // Mapping tên biến camelCase sang snake_case trong DB
     private String fullName;
 
     private String phoneNumber;
@@ -54,4 +55,13 @@ public class UserEntity extends BaseEntity {
     @JoinColumn(name = "role_id", nullable = false) // Tên cột khóa ngoại trong DB sẽ là role_id
     private RoleEntity role;
 
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    @ToString.Exclude // <--- KHÔNG CÓ CÁI NÀY LÀ BỊ TRÀN BỘ NHỚ NGAY
+    @JsonIgnore 
+    // Nếu không có dòng này, User chứa Appointment, Appointment chứa User -> Lặp vô tận -> Treo API.
+    @Builder.Default // Nếu dùng @SuperBuilder/Builder thì nên có dòng này để khởi tạo list rỗng
+    private List<AppointmentEntity> appointments = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<AddressEntity> addresses;
 }

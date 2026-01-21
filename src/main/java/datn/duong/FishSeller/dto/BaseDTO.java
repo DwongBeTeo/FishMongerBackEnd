@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -11,6 +12,7 @@ import lombok.experimental.SuperBuilder;
 @Data
 @SuperBuilder // Dùng cái này thay cho @Builder thường để hỗ trợ kế thừa
 @NoArgsConstructor
+@AllArgsConstructor
 public abstract class BaseDTO {
 
     private Long id;

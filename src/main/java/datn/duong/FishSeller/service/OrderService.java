@@ -79,21 +79,12 @@ private final OrderRepository orderRepository;
                 "Đơn hàng <b>#" + order.getId() + "</b> đã bị hủy bởi Admin vì lý do hết hàng hoặc sự cố vận hành."
             );
         }
-
-        // LOGIC 2: Nếu Admin chuyển sang trạng thái khác (VD: SHIPPING)
-        // Mà khách đang yêu cầu hủy -> Thì coi như Admin TỪ CHỐI yêu cầu đó
-        // if(newStatus != OrderStatus.CANCELLED && order.isCancellationRequested()) {
-        //     order.setCancellationRequested(false);
-            // // Gửi email từ chối
-            // sendNotificationToUser(
-            //     order.getUser(),
-            //     "Yêu cầu hủy đơn hàng #" + order.getId() + " bị từ chối",
-            //     "Yêu cầu hủy đơn hàng <b>#" + order.getId() + "</b> của bạn đã bị TỪ CHỐI. Đơn hàng đang tiếp tục được xử lý. Nếu có vấn đề gì vui lòng liên hệ qua số điện thoại (" + newStatus.getDisplayName() + ")."
-            // );
-        // }
-
-        // LOGIC 3: Thông báo khi đơn hàng Giao thành công 
+        // LOGIC 3: tư động cập nhật trạng thái thanh toán Thông báo khi đơn hàng Giao thành công 
         if (newStatus == OrderStatus.COMPLETED) {
+            if(order.getPaymentStatus()==PaymentStatus.UNPAID){
+                order.setPaymentStatus(PaymentStatus.PAID);
+            }
+
              sendNotificationToUser(
                 order.getUser(),
                 "Đơn hàng #" + order.getId() + " đã hoàn thành",
@@ -161,6 +152,12 @@ private final OrderRepository orderRepository;
     public OrderDTO placeOrder(OrderCreationRequest request) {
         // Lấy user hien tai
         UserEntity user = userService.getCurrentProfile();
+
+        // --- 1. VALIDATE PHONE NUMBER (MỚI) ---
+        if (!AddressService.isValidPhoneNumber(request.getPhoneNumber())) {
+            throw new RuntimeException("Số điện thoại nhận hàng không hợp lệ!");
+        }
+
         // B1: Lấy giỏ hàng của User
         CartEntity cart = cartRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new RuntimeException("Cart not found"));
