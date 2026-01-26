@@ -38,6 +38,11 @@ public class AddressService {
             throw new RuntimeException("Số điện thoại không hợp lệ (Phải có 10 số, bắt đầu bằng số 0)");
         }
 
+        // Nếu cái mới là default, reset những cái cũ
+        if (dto.isDefault()) {
+            addressRepository.resetDefaultByUserId(user.getId());
+        }
+
         AddressEntity entity = AddressEntity.builder()
                 .user(user)
                 .recipientName(dto.getRecipientName())
@@ -78,6 +83,7 @@ public class AddressService {
         address.setRecipientName(dto.getRecipientName());
         address.setPhoneNumber(dto.getPhoneNumber());
         address.setDetailedAddress(dto.getDetailedAddress());
+        address.setDefault(dto.isDefault());
         
         // Logic xử lý địa chỉ mặc định (Nếu user set cái này là default)
         if (dto.isDefault() && !address.isDefault()) {

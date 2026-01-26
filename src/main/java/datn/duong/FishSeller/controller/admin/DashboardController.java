@@ -1,4 +1,4 @@
-package datn.duong.FishSeller.controller;
+package datn.duong.FishSeller.controller.admin;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

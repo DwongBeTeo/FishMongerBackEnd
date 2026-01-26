@@ -49,14 +49,17 @@ public interface AppointmentRepository extends JpaRepository<AppointmentEntity, 
     // HÀM TÌM KIẾM NÂNG CAO CHO ADMIN
     // Logic: Nếu keyword null thì lấy hết. Nếu có keyword thì tìm trong Tên khách OR SĐT OR Tên NV OR ID
     @Query("SELECT a FROM AppointmentEntity a " +
+           "LEFT JOIN a.user u " +
+           "LEFT JOIN a.employee e " +
+           "LEFT JOIN a.serviceType s " +
            "WHERE (:keyword IS NULL OR :keyword = '' OR " +
-           "LOWER(a.user.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "a.user.phoneNumber LIKE CONCAT('%', :keyword, '%') OR " +
-           "LOWER(a.employee.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(a.serviceType.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "a.phoneNumber LIKE CONCAT('%', :keyword, '%') OR " + // Tìm theo SĐT trên đơn hàng
+           "(e IS NOT NULL AND LOWER(e.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))) OR " +
+           "LOWER(s.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "CAST(a.id AS string) LIKE CONCAT('%', :keyword, '%')) " +
-           "AND (:status IS NULL OR a.status = :status) " + // Lọc thêm theo Status nếu cần
-           "ORDER BY a.appointmentDate DESC, a.appointmentTime DESC") // Mặc định sắp xếp mới nhất
+           "AND (:status IS NULL OR a.status = :status) " +
+           "ORDER BY a.appointmentDate DESC, a.appointmentTime DESC")
     Page<AppointmentEntity> searchAppointments(
             @Param("keyword") String keyword,
             @Param("status") AppointmentStatus status,

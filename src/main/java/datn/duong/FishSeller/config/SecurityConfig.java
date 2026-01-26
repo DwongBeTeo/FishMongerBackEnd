@@ -38,7 +38,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                     .requestMatchers("/status","/healthCheck","/register","/activate","/login").permitAll()
                     .requestMatchers("/products/**").permitAll()
+                    .requestMatchers("/service-types/**").permitAll()
                     .requestMatchers("/categories/**").permitAll()
+                    .requestMatchers("/appointments/**").permitAll()
                     .requestMatchers("/admin/**").hasAnyAuthority("ADMIN")
                         .anyRequest().authenticated()
                     )

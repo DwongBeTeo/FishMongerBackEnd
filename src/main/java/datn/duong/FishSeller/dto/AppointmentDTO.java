@@ -17,9 +17,12 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 public class AppointmentDTO extends BaseDTO {
 
+    private Long addressId; // ID từ bảng user_addresses
+
     // --- 1. THÔNG TIN KHÁCH HÀNG ---
     private Long userId;            // Input: Dùng khi tạo đơn
     private String userFullName;    // Output: Hiển thị tên khách
+    private String username;
     // private String userPhoneNumber; // Output: SĐT khách
     private String phoneNumber; // Input (Khách nhập) & Output (Hiển thị)
 

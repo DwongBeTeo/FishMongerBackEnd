@@ -9,12 +9,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import datn.duong.FishSeller.dto.AppointmentDTO;
+import datn.duong.FishSeller.entity.AddressEntity;
 import datn.duong.FishSeller.entity.AppointmentEntity;
 import datn.duong.FishSeller.entity.EmployeeEntity;
 import datn.duong.FishSeller.entity.ServiceTypeEntity;
 import datn.duong.FishSeller.entity.UserEntity;
 import datn.duong.FishSeller.enums.AppointmentStatus;
 import datn.duong.FishSeller.enums.PaymentStatus;
+import datn.duong.FishSeller.repository.AddressRepository;
 import datn.duong.FishSeller.repository.AppointmentRepository;
 import datn.duong.FishSeller.repository.ServiceTypeRepository;
 import datn.duong.FishSeller.repository.EmployeeRepository;
@@ -30,27 +32,62 @@ public class AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final ServiceTypeRepository serviceTypeRepository;
     private final EmployeeRepository employeeRepository;
+    private final AddressRepository addressRepository;
     private final UserService userService; // Để lấy User hiện tại
 
     // =========================================================================
     // PHẦN 1: USER METHODS (Khách hàng)
     // =========================================================================
 
-    // 1. Đặt lịch mới
     @Transactional
     public AppointmentDTO createBooking(AppointmentDTO dto) {
-        // A. Lấy User hiện tại (Bảo mật: Luôn dùng user từ token, ko dùng user từ dto gửi lên)
+        // A. Lấy User hiện tại
         UserEntity currentUser = userService.getCurrentProfile();
 
         // B. Validate Dịch vụ
         ServiceTypeEntity service = serviceTypeRepository.findById(dto.getServiceTypeId())
                 .orElseThrow(() -> new RuntimeException("Dịch vụ không tồn tại"));
-        
+
         if (!service.getIsActive()) {
             throw new RuntimeException("Dịch vụ này đang tạm ngưng phục vụ");
         }
 
-        // C. Validate Thời gian (Không được đặt quá khứ)
+        // C. Logic xác định Thông tin liên hệ (Snapshot)
+        String finalAddress = dto.getAddress();
+        String finalPhone = dto.getPhoneNumber();
+        String recipientName = ""; // Tên người nhận lấy từ sổ địa chỉ
+
+        // Ưu tiên 1: Nếu khách chọn địa chỉ từ danh sách (AddressId)
+        if (dto.getAddressId() != null) {
+            AddressEntity addr = addressRepository.findById(dto.getAddressId())
+                    .orElseThrow(() -> new RuntimeException("Địa chỉ không hợp lệ"));
+            finalAddress = addr.getDetailedAddress();
+            finalPhone = addr.getPhoneNumber();
+            recipientName = addr.getRecipientName(); // Lấy tên người nhận từ đây
+        } 
+        // Ưu tiên 2: Nếu không có Id, kiểm tra xem khách có nhập tay không. 
+        // Nếu trống cả hai, lấy địa chỉ mặc định của User
+        else if (finalAddress == null || finalAddress.trim().isEmpty()) {
+            AddressEntity defaultAddr = addressRepository.findByUserIdAndIsDefaultTrue(currentUser.getId())
+                    .orElse(null);
+            if (defaultAddr != null) {
+                finalAddress = defaultAddr.getDetailedAddress();
+                finalPhone = defaultAddr.getPhoneNumber();
+                recipientName = defaultAddr.getRecipientName();
+            }
+        }
+
+        // Ưu tiên 3: Trường hợp cuối cùng nếu vẫn chưa có SĐT -> Lấy SĐT chính của User
+        if (finalPhone == null || finalPhone.trim().isEmpty()) {
+            finalPhone = currentUser.getPhoneNumber();
+        }
+
+        // Kiểm tra bắt buộc phải có địa chỉ
+        if (finalAddress == null || finalAddress.trim().isEmpty()) {
+            throw new RuntimeException("Vui lòng cung cấp địa chỉ thực hiện dịch vụ!");
+        }
+
+        // D. Validate Thời gian
         if (dto.getAppointmentDate().isBefore(LocalDate.now())) {
             throw new RuntimeException("Không thể đặt lịch trong quá khứ");
         }
@@ -58,42 +95,33 @@ public class AppointmentService {
             throw new RuntimeException("Giờ đặt phải sau giờ hiện tại");
         }
 
-        // D. Tính toán giờ kết thúc
+        // E. Tính toán giờ kết thúc
         LocalTime startTime = dto.getAppointmentTime();
         LocalTime endTime = startTime.plusMinutes(service.getEstimatedDuration());
 
-        // E LOGIC XỬ LÝ SỐ ĐIỆN THOẠI ---
-        String contactPhone = dto.getPhoneNumber();
-        
-        // Nếu khách KHÔNG nhập SĐT riêng -> Lấy SĐT trong hồ sơ User
-        if (contactPhone == null || contactPhone.trim().isEmpty()) {
-            contactPhone = currentUser.getPhoneNumber();
-        }
-        
-        // Nếu hồ sơ cũng không có SĐT -> Báo lỗi bắt buộc nhập
-        if (contactPhone == null || contactPhone.trim().isEmpty()) {
-            throw new RuntimeException("Vui lòng cung cấp số điện thoại liên hệ!");
+        // F. Gộp Ghi chú (Note) kèm tên người nhận để Admin dễ quan sát
+        String finalNote = dto.getNote();
+        if (recipientName != null && !recipientName.isEmpty()) {
+            finalNote = "[Người nhận: " + recipientName + "] " + (finalNote != null ? finalNote : "");
         }
 
-        // F. Tạo Entity
+        // G. Tạo Entity
         AppointmentEntity appointment = AppointmentEntity.builder()
-                .user(currentUser) // Gán cứng User hiện tại
+                .user(currentUser)
                 .serviceType(service)
-                .phoneNumber(contactPhone)
+                .phoneNumber(finalPhone) // SĐT đã chốt qua các bước ưu tiên
                 .appointmentDate(dto.getAppointmentDate())
                 .appointmentTime(startTime)
                 .expectedEndTime(endTime)
-                .address(dto.getAddress())
-                .note(dto.getNote())
-                .priceAtBooking(service.getPrice()) // Snapshot giá tại thời điểm đặt
-                .status(AppointmentStatus.PENDING)  // Mới đặt là Chờ xác nhận
+                .address(finalAddress) // Địa chỉ đã chốt
+                .note(finalNote)      // Ghi chú đã gộp tên người nhận
+                .priceAtBooking(service.getPrice())
+                .status(AppointmentStatus.PENDING)
                 .paymentStatus(PaymentStatus.UNPAID)
-                .employee(null) // Chưa phân công
                 .build();
 
         return toDTO(appointmentRepository.save(appointment));
     }
-
     // 2. User Hủy lịch
     @Transactional
     public void cancelBookingByUser(Long appointmentId, String reason) {
@@ -236,6 +264,7 @@ public class AppointmentService {
                 // User info
                 .userId(entity.getUser().getId())
                 .userFullName(entity.getUser().getFullName())
+                .username(entity.getUser().getUsername())
                 // .userPhoneNumber(entity.getUser().getPhoneNumber())
                 .phoneNumber(entity.getPhoneNumber())
                 // Service info
