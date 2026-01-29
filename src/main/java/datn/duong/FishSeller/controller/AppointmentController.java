@@ -45,13 +45,13 @@ public class AppointmentController {
 
     // 4. Hủy lịch (Chỉ được hủy khi còn PENDING/CONFIRMED)
     // URL: PATCH /appointments/{id}/cancel
-    @PatchMapping("/{id}/cancel")
-    public ResponseEntity<String> cancelBooking(
+    @PatchMapping("/{id}/request-cancel")
+    public ResponseEntity<String> requestCancel(
             @PathVariable Long id, 
             @RequestParam String reason
     ) {
-        appointmentService.cancelBookingByUser(id, reason);
-        return ResponseEntity.ok("Đã hủy lịch hẹn thành công.");
+        appointmentService.requestCancelBooking(id, reason);
+        return ResponseEntity.ok("Yêu cầu hủy của bạn đã được gửi và đang chờ Admin phê duyệt.");
     }
 
     // 5. Gửi đánh giá (Feedback)

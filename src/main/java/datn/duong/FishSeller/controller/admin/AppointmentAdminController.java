@@ -51,4 +51,25 @@ public class AppointmentAdminController {
     ) {
         return ResponseEntity.ok(appointmentService.updateStatusByAdmin(id, status));
     }
+
+    // 4. Admin chủ động hủy lịch
+    // URL: PATCH /admin/appointments/{id}/cancel
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<AppointmentDTO> cancelAppointment(
+            @PathVariable Long id,
+            @RequestParam(required = false) String reason
+    ) {
+        return ResponseEntity.ok(appointmentService.cancelByAdmin(id, reason));
+    }
+
+    // 5.: DUYỆT HOẶC TỪ CHỐI YÊU CẦU HỦY TỪ KHÁCH HÀNG
+    // URL: PUT /admin/appointments/{id}/review-cancel?approve=true&reason=...
+    @PutMapping("/{id}/review-cancel")
+    public ResponseEntity<AppointmentDTO> reviewCancellation(
+            @PathVariable Long id,
+            @RequestParam boolean approve,
+            @RequestParam(required = false) String reason
+    ) {
+        return ResponseEntity.ok(appointmentService.handleCancellationReview(id, approve, reason));
+    }
 }

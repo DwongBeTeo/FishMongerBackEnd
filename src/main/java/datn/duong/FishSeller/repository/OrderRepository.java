@@ -35,4 +35,9 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long>{
                    "GROUP BY DATE(o.order_date) " +
                    "ORDER BY DATE(o.order_date) ASC", nativeQuery = true)
     List<Object[]> getDailyRevenue(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // 4. Thống kê số lượng đơn theo trạng thái (Cho Pie Chart)
+    // Kết quả trả về dạng: [ ["PENDING", 5], ["COMPLETED", 10] ]
+    @Query("SELECT o.status, COUNT(o) FROM OrderEntity o GROUP BY o.status")
+    List<Object[]> countOrdersByStatus();
 }

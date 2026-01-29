@@ -52,7 +52,7 @@ public class AppointmentEntity extends BaseEntity{
     private PaymentStatus paymentStatus = PaymentStatus.UNPAID; // Sử dụng Enum PaymentStatus bạn đã gửi
 
     @Column(name = "cancellation_reason", columnDefinition = "TEXT")
-    private String cancellationReason; 
+    private String cancellationReason;
     
     // 4. FEEDBACK
     private Integer rating;

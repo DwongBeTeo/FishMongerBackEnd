@@ -24,6 +24,7 @@ import datn.duong.FishSeller.repository.EmployeeRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +34,8 @@ public class AppointmentService {
     private final ServiceTypeRepository serviceTypeRepository;
     private final EmployeeRepository employeeRepository;
     private final AddressRepository addressRepository;
-    private final UserService userService; // Để lấy User hiện tại
+    private final UserService userService;
+    private final EmailService emailService;
 
     // =========================================================================
     // PHẦN 1: USER METHODS (Khách hàng)
@@ -122,25 +124,28 @@ public class AppointmentService {
 
         return toDTO(appointmentRepository.save(appointment));
     }
-    // 2. User Hủy lịch
+    // 2. User gửi yêu cầu Hủy lịch
     @Transactional
-    public void cancelBookingByUser(Long appointmentId, String reason) {
+    public void requestCancelBooking(Long appointmentId, String reason) {
         UserEntity currentUser = userService.getCurrentProfile();
         AppointmentEntity appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Lịch hẹn không tồn tại"));
 
-        // BẢO MẬT: Check xem lịch này có phải của ông user đang login không?
+        // BẢO MẬT: Check quyền sở hữu đơn hàng
         if (!appointment.getUser().getId().equals(currentUser.getId())) {
-            throw new RuntimeException("Bạn không có quyền hủy lịch hẹn của người khác!");
+            throw new RuntimeException("Bạn không có quyền yêu cầu hủy lịch hẹn của người khác!");
         }
 
-        // Chỉ cho hủy khi còn PENDING hoặc CONFIRMED
-        if (appointment.getStatus() != AppointmentStatus.PENDING && appointment.getStatus() != AppointmentStatus.CONFIRMED) {
-            throw new RuntimeException("Không thể hủy khi đơn đang thực hiện hoặc đã hoàn thành");
+        // Kiểm tra trạng thái: Chỉ cho phép yêu cầu hủy khi chưa thực hiện
+        if (appointment.getStatus() != AppointmentStatus.PENDING && 
+            appointment.getStatus() != AppointmentStatus.CONFIRMED) {
+            throw new RuntimeException("Đơn hàng đã vào giai đoạn không thể yêu cầu hủy (Đang thực hiện hoặc đã xong).");
         }
 
-        appointment.setStatus(AppointmentStatus.CANCELLED);
-        appointment.setCancellationReason("Khách hủy: " + reason);
+        // Cập nhật trạng thái chờ duyệt
+        appointment.setStatus(AppointmentStatus.CANCEL_REQUESTED);
+        appointment.setCancellationReason("Khách yêu cầu hủy: " + reason);
+        
         appointmentRepository.save(appointment);
     }
 
@@ -250,6 +255,99 @@ public class AppointmentService {
                 .map(this::toDTO);
     }
 
+    // 8. Duyệt hủy theo yêu cầu của user
+    @Transactional
+    public AppointmentDTO handleCancellationReview(Long id, boolean approve, String adminReason) {
+        AppointmentEntity appt = appointmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Lịch hẹn không tồn tại"));
+
+        // Kiểm tra: Phải đúng là đang ở trạng thái khách yêu cầu hủy mới xử lý được
+        if (appt.getStatus() != AppointmentStatus.CANCEL_REQUESTED) {
+            throw new RuntimeException("Lịch hẹn này không nằm trong danh sách chờ duyệt hủy.");
+        }
+
+        if (approve) {
+            // ĐỒNG Ý HỦY
+            appt.setStatus(AppointmentStatus.CANCELLED);
+            appt.setCancellationReason(appt.getCancellationReason() + " | [Admin duyệt]: Đồng ý hủy.");
+            
+            sendAppointmentCancellationEmail(appt, 
+                "Lịch hẹn #" + id + " đã được hủy thành công", 
+                "Yêu cầu hủy lịch hẹn của bạn đã được Admin <b>CHẤP NHẬN</b>.");
+        } else {
+            // TỪ CHỐI HỦY -> Quay lại trạng thái trước đó (mặc định cho về CONFIRMED)
+            appt.setStatus(AppointmentStatus.CONFIRMED);
+            String rejectMsg = "Yêu cầu hủy lịch hẹn của bạn đã bị <b>TỪ CHỐI</b>.";
+            if (adminReason != null) rejectMsg += "<br/><b>Lý do từ chối:</b> " + adminReason;
+            
+            sendAppointmentCancellationEmail(appt, 
+                "Yêu cầu hủy lịch hẹn #" + id + " bị từ chối", 
+                rejectMsg);
+        }
+        return toDTO(appointmentRepository.save(appt));
+    }
+
+    //  9. ADMIN CHỦ ĐỘNG HỦY LỊCH
+    @Transactional
+    public AppointmentDTO cancelByAdmin(Long id, String reason) {
+        AppointmentEntity appt = appointmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Lịch hẹn không tồn tại"));
+
+        if (appt.getStatus() == AppointmentStatus.COMPLETED) {
+            throw new RuntimeException("Không thể hủy lịch hẹn đã hoàn thành!");
+        }
+
+        appt.setStatus(AppointmentStatus.CANCELLED);
+        String finalReason = (reason != null && !reason.isEmpty()) ? reason : "Shop bận đột xuất hoặc có sự cố vận hành.";
+        appt.setCancellationReason("[ADMIN CHỦ ĐỘNG HỦY]: " + finalReason);
+        // Nếu đơn hàng đã thanh toán trước đó (nếu có logic hoàn tiền thì thêm ở đây)
+        // appointment.setPaymentStatus(PaymentStatus.REFUNDED); 
+        
+        sendAppointmentCancellationEmail(appt, 
+            "Thông báo hủy lịch hẹn #" + id, 
+            "Chúng tôi rất tiếc phải thông báo lịch hẹn của bạn đã bị hủy bởi Admin.<br/><b>Lý do:</b> " + finalReason);
+
+        return toDTO(appointmentRepository.save(appt));
+    }
+
+    // =========================================================================
+    // HÀM GỬI EMAIL THÔNG BÁO DÙNG CHUNG
+    // =========================================================================
+    private void sendAppointmentCancellationEmail(AppointmentEntity appt, String subject, String content) {
+        if (appt.getUser().getEmail() == null) return;
+
+        String finalContent = (content != null) ? content : "Thông báo mới về lịch hẹn của bạn.";
+
+        String htmlBody = String.format(
+            "<div style='font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;'>" +
+            "  <h2 style='color: #0891b2;'>Thông báo Lịch hẹn #%d</h2>" +
+            "  <p>Xin chào <b>%s</b>,</p>" +
+            "  <p>%s</p>" +
+            "  <div style='background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 15px 0;'>" +
+            "    <p style='margin: 0;'><b>Dịch vụ:</b> %s</p>" +
+            "    <p style='margin: 5px 0;'><b>Thời gian:</b> %s ngày %s</p>" +
+            "    <p style='margin: 0;'><b>Địa chỉ:</b> %s</p>" +
+            "  </div>" +
+            "  <p style='color: #64748b; font-size: 12px;'>Đây là email tự động từ hệ thống Cá Cảnh Shop.</p>" +
+            "</div>",
+            appt.getId(),
+            appt.getUser().getUsername(),
+            finalContent,
+            appt.getServiceType().getName(),
+            appt.getAppointmentTime(),
+            appt.getAppointmentDate(),
+            appt.getAddress()
+        );
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendEmail(appt.getUser().getEmail(), subject, htmlBody);
+            } catch (Exception e) {
+                System.err.println("Lỗi gửi email lịch hẹn: " + e.getMessage());
+            }
+        });
+    }
+
     // =========================================================================
     // MAPPING
     // =========================================================================
@@ -265,8 +363,8 @@ public class AppointmentService {
                 .userId(entity.getUser().getId())
                 .userFullName(entity.getUser().getFullName())
                 .username(entity.getUser().getUsername())
-                // .userPhoneNumber(entity.getUser().getPhoneNumber())
                 .phoneNumber(entity.getPhoneNumber())
+                .email(entity.getUser().getEmail())
                 // Service info
                 .serviceTypeId(entity.getServiceType().getId())
                 .serviceTypeName(entity.getServiceType().getName())

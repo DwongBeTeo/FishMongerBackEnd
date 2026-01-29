@@ -2,16 +2,22 @@ package datn.duong.FishSeller.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import datn.duong.FishSeller.dto.OrderDTO;
 import datn.duong.FishSeller.dto.dashboard.DailyRevenueDTO;
 import datn.duong.FishSeller.dto.dashboard.DashboardStatisticsDTO;
+import datn.duong.FishSeller.dto.dashboard.TopProductDTO;
 import datn.duong.FishSeller.repository.AppointmentRepository;
+import datn.duong.FishSeller.repository.OrderItemRepository;
 import datn.duong.FishSeller.repository.OrderRepository;
 import datn.duong.FishSeller.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,67 +29,117 @@ public class DashboardService {
     private final OrderRepository orderRepository;
     private final AppointmentRepository appointmentRepository;
     private final UserRepository userRepository;
-
+    private final OrderItemRepository orderItemRepository; // Để lấy Top sản phẩm
+    private final OrderService orderService; // Để dùng hàm toDTO cho Recent Orders
     public DashboardStatisticsDTO getDashboardStats() {
-        // 1. Xác định khoảng thời gian: Đầu tháng đến Cuối tháng này
+        // =========================================================================
+        // 1. XÁC ĐỊNH THỜI GIAN (THÁNG NÀY & THÁNG TRƯỚC)
+        // =========================================================================
         LocalDate today = LocalDate.now();
+        
+        // Tháng này
         LocalDate firstDayOfMonth = today.withDayOfMonth(1);
         LocalDate lastDayOfMonth = today.withDayOfMonth(today.lengthOfMonth());
-
-        // Convert sang LocalDateTime cho Order (vì Order dùng LocalDateTime)
         LocalDateTime startDateTime = firstDayOfMonth.atStartOfDay();
         LocalDateTime endDateTime = lastDayOfMonth.atTime(23, 59, 59);
 
-        // 2. Lấy số liệu tổng quan
+        // Tháng trước (Để tính tăng trưởng) -> MỚI THÊM
+        LocalDate firstDayLastMonth = firstDayOfMonth.minusMonths(1);
+        LocalDate lastDayLastMonth = lastDayOfMonth.minusMonths(1);
+        LocalDateTime startLastMonth = firstDayLastMonth.atStartOfDay();
+        LocalDateTime endLastMonth = lastDayLastMonth.atTime(23, 59, 59);
+
+        // =========================================================================
+        // 2. SỐ LIỆU TỔNG QUAN (DOANH THU & SỐ LƯỢNG)
+        // =========================================================================
+        
+        // --- A. Doanh thu Tháng Này (Logic cũ của bạn) ---
         Double orderRevenue = orderRepository.sumRevenueByDateRange(startDateTime, endDateTime);
         Double apptRevenue = appointmentRepository.sumRevenueByDateRange(firstDayOfMonth, lastDayOfMonth);
         
-        // Handle null (nếu tháng này chưa có đơn nào)
         orderRevenue = (orderRevenue != null) ? orderRevenue : 0.0;
         apptRevenue = (apptRevenue != null) ? apptRevenue : 0.0;
+        Double totalRevenueThisMonth = orderRevenue + apptRevenue;
 
+        // --- B. Doanh thu Tháng Trước (Logic MỚI để tính Growth Rate) ---
+        Double orderRevLast = orderRepository.sumRevenueByDateRange(startLastMonth, endLastMonth);
+        Double apptRevLast = appointmentRepository.sumRevenueByDateRange(firstDayLastMonth, lastDayLastMonth);
+        
+        double totalRevenueLastMonth = (orderRevLast != null ? orderRevLast : 0.0) + 
+                                       (apptRevLast != null ? apptRevLast : 0.0);
+
+        // --- C. Tính % Tăng trưởng ---
+        double growthRate = 0.0;
+        if (totalRevenueLastMonth > 0) {
+            growthRate = ((totalRevenueThisMonth - totalRevenueLastMonth) / totalRevenueLastMonth) * 100;
+        } else if (totalRevenueThisMonth > 0) {
+            growthRate = 100.0; // Tăng trưởng tuyệt đối từ 0
+        }
+
+        // --- D. Các chỉ số đếm (Logic cũ của bạn) ---
         Long totalOrders = orderRepository.countOrdersByDateRange(startDateTime, endDateTime);
         Long totalAppts = appointmentRepository.countAppointmentsByDateRange(firstDayOfMonth, lastDayOfMonth);
-        Long totalUsers = userRepository.count(); // Tổng số khách hàng toàn hệ thống
+        Long totalUsers = userRepository.count();
 
-        // 3. Lấy dữ liệu biểu đồ (SỬA ĐOẠN NÀY)
+        // =========================================================================
+        // 3. BIỂU ĐỒ DOANH THU THEO NGÀY (Logic cũ của bạn - Giữ nguyên)
+        // =========================================================================
         List<Object[]> orderRaw = orderRepository.getDailyRevenue(startDateTime, endDateTime);
         List<Object[]> apptRaw = appointmentRepository.getDailyRevenue(firstDayOfMonth, lastDayOfMonth);
 
-        // Convert Object[] -> DailyRevenueDTO
         List<DailyRevenueDTO> orderDaily = mapToDTO(orderRaw);
         List<DailyRevenueDTO> apptDaily = mapToDTO(apptRaw);
 
-        // 4. Gộp dữ liệu biểu đồ (Order + Appointment = Total Daily)
-        Map<LocalDate, Double> revenueMap = new TreeMap<>(); // TreeMap để tự sắp xếp theo ngày
-
-        // Khởi tạo các ngày trong tháng bằng 0 (để biểu đồ liền mạch không bị đứt đoạn)
+        Map<LocalDate, Double> revenueMap = new TreeMap<>();
         for (LocalDate date = firstDayOfMonth; !date.isAfter(today); date = date.plusDays(1)) {
             revenueMap.put(date, 0.0);
         }
+        for (DailyRevenueDTO item : orderDaily) revenueMap.merge(item.getDate(), item.getRevenue(), Double::sum);
+        for (DailyRevenueDTO item : apptDaily) revenueMap.merge(item.getDate(), item.getRevenue(), Double::sum);
 
-        // Cộng dồn doanh thu Order
-        for (DailyRevenueDTO item : orderDaily) {
-            revenueMap.merge(item.getDate(), item.getRevenue(), Double::sum);
-        }
-
-        // Cộng dồn doanh thu Appointment
-        for (DailyRevenueDTO item : apptDaily) {
-            revenueMap.merge(item.getDate(), item.getRevenue(), Double::sum);
-        }
-
-        // Chuyển Map thành List
         List<DailyRevenueDTO> finalDailyStats = revenueMap.entrySet().stream()
                 .map(entry -> new DailyRevenueDTO(entry.getKey(), entry.getValue()))
                 .collect(Collectors.toList());
 
-        // 5. Build DTO trả về
+        // =========================================================================
+        // 4. CÁC TÍNH NĂNG MỚI (PIE CHART, TOP PRODUCTS, RECENT ORDERS)
+        // =========================================================================
+
+        // --- E. Pie Chart (Trạng thái đơn hàng) ---
+        List<Object[]> statusCounts = orderRepository.countOrdersByStatus();
+        Map<String, Long> statusMap = new HashMap<>();
+        if (statusCounts != null) {
+            for (Object[] row : statusCounts) {
+                statusMap.put(row[0].toString(), (Long) row[1]);
+            }
+        }
+
+        // --- F. Top Sản phẩm bán chạy (Top 5) ---
+        List<TopProductDTO> topProducts = orderItemRepository.findTopSellingProducts(PageRequest.of(0, 5));
+
+        // --- G. Đơn hàng gần đây (5 đơn mới nhất) ---
+        // Sử dụng orderService.toDTO để convert Entity sang DTO cho đầy đủ thông tin
+        List<OrderDTO> recentOrders = orderRepository.findAll(
+                PageRequest.of(0, 5, Sort.by("orderDate").descending())
+        ).stream().map(orderService::toDTO).collect(Collectors.toList());
+
+        // =========================================================================
+        // 5. BUILD KẾT QUẢ TRẢ VỀ
+        // =========================================================================
         return DashboardStatisticsDTO.builder()
-                .totalRevenueThisMonth(orderRevenue + apptRevenue)
+                // Chỉ số cũ
+                .totalRevenueThisMonth(totalRevenueThisMonth)
                 .totalOrdersThisMonth(totalOrders)
                 .totalAppointmentsThisMonth(totalAppts)
                 .totalCustomers(totalUsers)
                 .dailyRevenues(finalDailyStats)
+                
+                // Chỉ số MỚI
+                .totalRevenueLastMonth(totalRevenueLastMonth)
+                .growthRate(Math.round(growthRate * 100.0) / 100.0) // Làm tròn 2 số thập phân
+                .orderStatusCounts(statusMap)
+                .topProducts(topProducts)
+                .recentOrders(recentOrders)
                 .build();
     }
     // --- HÀM HELPER ĐỂ MAP DỮ LIỆU TỪ NATIVE QUERY ---

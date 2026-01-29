@@ -54,6 +54,7 @@ public interface AppointmentRepository extends JpaRepository<AppointmentEntity, 
            "LEFT JOIN a.serviceType s " +
            "WHERE (:keyword IS NULL OR :keyword = '' OR " +
            "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "a.phoneNumber LIKE CONCAT('%', :keyword, '%') OR " + // Tìm theo SĐT trên đơn hàng
            "(e IS NOT NULL AND LOWER(e.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))) OR " +
            "LOWER(s.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +

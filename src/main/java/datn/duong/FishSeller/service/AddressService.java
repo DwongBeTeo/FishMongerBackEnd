@@ -30,16 +30,16 @@ public class AddressService {
     }
 
     // Thêm địa chỉ mới
+    @Transactional
     public AddressDTO addAddress(AddressDTO dto) {
         UserEntity user = userService.getCurrentProfile();
         
-        // Validate số điện thoại (Logic dùng chung)
-        if (!isValidPhoneNumber(dto.getPhoneNumber())) {
-            throw new RuntimeException("Số điện thoại không hợp lệ (Phải có 10 số, bắt đầu bằng số 0)");
-        }
+        // 1. Kiểm tra xem đây có phải địa chỉ đầu tiên không
+        List<AddressEntity> existing = addressRepository.findByUserId(user.getId());
+        boolean isFirstAddress = existing.isEmpty();
 
-        // Nếu cái mới là default, reset những cái cũ
-        if (dto.isDefault()) {
+        // 2. Nếu là default HOẶC là địa chỉ đầu tiên -> Reset những cái cũ
+        if (dto.isDefault() || isFirstAddress) {
             addressRepository.resetDefaultByUserId(user.getId());
         }
 
@@ -48,53 +48,52 @@ public class AddressService {
                 .recipientName(dto.getRecipientName())
                 .phoneNumber(dto.getPhoneNumber())
                 .detailedAddress(dto.getDetailedAddress())
-                .isDefault(dto.isDefault())
+                .isDefault(dto.isDefault() || isFirstAddress) // Tự động set true nếu là cái đầu tiên
                 .build();
         
-        // Nếu user chưa có địa chỉ nào, cái đầu tiên sẽ là default
-        List<AddressEntity> existing = addressRepository.findByUserId(user.getId());
-        if (existing.isEmpty()) entity.setDefault(true);
-
         return toDTO(addressRepository.save(entity));
     }
 
     // 4. Sửa địa chỉ
     @Transactional
     public AddressDTO updateAddress(Long addressId, AddressDTO dto) {
-        // Lấy User hiện tại
         UserEntity user = userService.getCurrentProfile();
 
-        // Tìm địa chỉ trong DB
         AddressEntity address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy địa chỉ với ID: " + addressId));
 
-        // --- BẢO MẬT: Kiểm tra quyền sở hữu ---
+        // --- GIỮ NGUYÊN BẢO MẬT ---
         if (!address.getUser().getId().equals(user.getId())) {
             throw new RuntimeException("Bạn không có quyền sửa địa chỉ này!");
         }
 
-        // --- Validate lại số điện thoại nếu có thay đổi ---
+        // --- GIỮ NGUYÊN VALIDATE SĐT ---
         if (dto.getPhoneNumber() != null && !isValidPhoneNumber(dto.getPhoneNumber())) {
             throw new RuntimeException("Số điện thoại không hợp lệ");
         }
 
-        // Cập nhật thông tin
-        // Chỉ cập nhật những trường client gửi lên (hoặc cập nhật hết tùy logic frontend)
+        // Cập nhật thông tin cơ bản
         address.setRecipientName(dto.getRecipientName());
         address.setPhoneNumber(dto.getPhoneNumber());
         address.setDetailedAddress(dto.getDetailedAddress());
-        address.setDefault(dto.isDefault());
         
-        // Logic xử lý địa chỉ mặc định (Nếu user set cái này là default)
+        // --- SỬA LOGIC DEFAULT ĐỂ CHẠY ĐÚNG ---
         if (dto.isDefault() && !address.isDefault()) {
-            // Cần bỏ default của các địa chỉ khác (nếu muốn chỉ có 1 default)
-            // (Phần này nâng cao, tạm thời set thẳng vào)
+            // 1. Reset tất cả các địa chỉ khác của user này về false
+            addressRepository.resetDefaultByUserId(user.getId());
+            
+            // 2. Set địa chỉ hiện tại là mặc định
             address.setDefault(true);
+            
+            // 3. Flush để đảm bảo lệnh reset chạy xong trước khi transaction kết thúc
+            addressRepository.saveAndFlush(address);
         } else {
+            // Giữ nguyên logic set theo dto nếu không phải trường hợp chuyển đổi mặc định mới
             address.setDefault(dto.isDefault());
+            addressRepository.save(address);
         }
 
-        return toDTO(addressRepository.save(address));
+        return toDTO(address); 
     }
 
     public void deleteAddress(Long id) {

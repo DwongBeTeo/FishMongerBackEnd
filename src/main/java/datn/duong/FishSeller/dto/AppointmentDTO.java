@@ -25,6 +25,7 @@ public class AppointmentDTO extends BaseDTO {
     private String username;
     // private String userPhoneNumber; // Output: SĐT khách
     private String phoneNumber; // Input (Khách nhập) & Output (Hiển thị)
+    private String email;
 
     // --- 2. THÔNG TIN DỊCH VỤ ---
     private Long serviceTypeId;     // Input

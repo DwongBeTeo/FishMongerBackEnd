@@ -111,12 +111,12 @@ private final OrderRepository orderRepository;
             // ADMIN ĐỒNG Ý HỦY
             restoreStock(order); // Hoàn kho
             order.setStatus(OrderStatus.CANCELLED);
-            // // Gửi mail đồng ý
-            // sendNotificationToUser(
-            //     order.getUser(),
-            //     "Xác nhận hủy đơn hàng #" + order.getId(),
-            //     "Yêu cầu hủy đơn hàng <b>#" + order.getId() + "</b> của bạn đã được CHẤP NHẬN."
-            // );
+            // Gửi mail đồng ý
+            sendNotificationToUser(
+                order.getUser(),
+                "Xác nhận hủy đơn hàng #" + order.getId(),
+                "Yêu cầu hủy đơn hàng <b>#" + order.getId() + "</b> của bạn đã được CHẤP NHẬN."
+            );
         } else {
             // B. ADMIN TỪ CHỐI
             String msg = "Yêu cầu hủy đơn hàng <b>#" + order.getId() + "</b> đã bị TỪ CHỐI.";
@@ -265,7 +265,7 @@ private final OrderRepository orderRepository;
                 .collect(Collectors.toList());
     }
 
-    // 4. (MỚI) XEM CHI TIẾT 1 ĐƠN HÀNG
+    // 4. XEM CHI TIẾT 1 ĐƠN HÀNG
     public OrderDTO getOrderById(Long orderId) {
         UserEntity currentUser = userService.getCurrentProfile();
         OrderEntity order = orderRepository.findById(orderId)
