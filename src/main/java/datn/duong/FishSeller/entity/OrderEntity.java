@@ -30,7 +30,7 @@ public class OrderEntity {
     @Column(updatable = false)
     @CreationTimestamp
     private LocalDateTime orderDate;
-    private Double totalAmount;
+    private Double totalAmount; // Tổng tiền hàng (Chưa trừ giảm giá)
     private String shippingAddress;
     
     @Column(nullable = false)
@@ -53,4 +53,10 @@ public class OrderEntity {
     // MỚI: Cờ đánh dấu user yêu cầu hủy
     @Column(columnDefinition = "boolean default false")
     private boolean cancellationRequested;
+    
+    private Double discountAmount; // Số tiền được giảm (VD: 50.000)
+    
+    private Double finalAmount;    // Tiền khách phải trả (total - discount)
+    
+    private String voucherCode;    // Lưu mã voucher khách đã dùng
 }

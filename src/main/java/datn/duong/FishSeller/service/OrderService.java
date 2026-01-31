@@ -2,6 +2,7 @@ package datn.duong.FishSeller.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -36,6 +37,7 @@ private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final UserService userService;
     private final EmailService emailService;
+    private final VoucherService voucherService;
 
     // ========================================================================
     // PHẦN DÀNH CHO ADMIN
@@ -153,7 +155,7 @@ private final OrderRepository orderRepository;
         // Lấy user hien tai
         UserEntity user = userService.getCurrentProfile();
 
-        // --- 1. VALIDATE PHONE NUMBER (MỚI) ---
+        // --- 1. VALIDATE PHONE NUMBER (GIỮ NGUYÊN CỦA BẠN) ---
         if (!AddressService.isValidPhoneNumber(request.getPhoneNumber())) {
             throw new RuntimeException("Số điện thoại nhận hàng không hợp lệ!");
         }
@@ -166,54 +168,93 @@ private final OrderRepository orderRepository;
             throw new RuntimeException("Cart is empty");
         }
 
-        // B2: Tạo OrderEntity (chưa có items)
+        // B2: Tạo OrderEntity sơ khai
         OrderEntity newOrder = OrderEntity.builder()
                 .user(user)
                 .orderDate(LocalDateTime.now())
-                .status(OrderStatus.PENDING) // Mặc định là Chờ xử lý
+                .status(OrderStatus.PENDING) 
                 .shippingAddress(request.getShippingAddress())
                 .phoneNumber(request.getPhoneNumber())
-                .paymentMethod(request.getPaymentMethod()) 
-                // Mặc định mới đặt là Chưa thanh toán (kể cả Banking cũng cần chờ check)
+                .paymentMethod(request.getPaymentMethod())
                 .paymentStatus(PaymentStatus.UNPAID)
-                .totalAmount(0.0) // Sẽ tính lại bên dưới
+                .totalAmount(0.0) // Tạm thời để 0, sẽ set lại sau khi tính toán
                 .build();
 
-        // B3: Duyệt qua CartItems để tạo OrderItems
+        // B3: Duyệt qua CartItems để tạo OrderItems & Tính tổng tiền hàng
         List<OrderItemEntity> orderItems = new ArrayList<>();
         double totalAmount = 0;
 
-        for (CartItemEntity cartItem : cart.getItems()) {
-            ProductEntity product = cartItem.getProduct();
+        List<CartItemEntity> sortedCartItems = new ArrayList<>(cart.getItems());
+        sortedCartItems.sort(Comparator.comparing(item -> item.getProduct().getId()));
 
-            // Kiểm tra tồn kho
-            if (product.getStockQuantity() < cartItem.getQuantity()) {
-                throw new RuntimeException("Product " + product.getName() + " is out of stock");
+
+        for (CartItemEntity cartItem : sortedCartItems) {
+            ProductEntity product = cartItem.getProduct();
+            int quantityToBuy = cartItem.getQuantity();
+
+            // 1. Kiểm tra tồn kho (Logic Check ở Java để báo lỗi đẹp cho User)
+            // Lưu ý: Đây chỉ là check sơ bộ, check thật sự nằm ở câu SQL update
+            if (product.getStockQuantity() < quantityToBuy) {
+                throw new RuntimeException("Sản phẩm '" + product.getName() + "' đã hết hàng hoặc không đủ số lượng!");
             }
 
-            // Trừ tồn kho
-            product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
-            productRepository.save(product);
+            // 2. TRỪ TỒN KHO (Dùng Custom Query)
+            // Hàm này trả về số dòng bị ảnh hưởng (updatedRows)
+            int updatedRows = productRepository.decreaseStock(product.getId(), quantityToBuy);
+            
+            if (updatedRows == 0) {
+                // Trường hợp: Lúc check Java thì còn hàng, nhưng lúc bấm nút thì người khác mua mất rồi
+                throw new RuntimeException("Rất tiếc, sản phẩm '" + product.getName() + "' vừa hết hàng trong tích tắc!");
+            }
 
-            // Tạo OrderItem
+            // Tạo OrderItem (Giữ nguyên)
             OrderItemEntity orderItem = OrderItemEntity.builder()
                     .order(newOrder)
                     .product(product)
-                    .quantity(cartItem.getQuantity())
-                    .priceAtOrder(product.getPrice()) // LẤY GIÁ HIỆN TẠI CỦA PRODUCT
+                    .quantity(quantityToBuy)
+                    .priceAtOrder(product.getPrice()) 
                     .build();
 
             orderItems.add(orderItem);
-            totalAmount += (product.getPrice() * cartItem.getQuantity());
+            totalAmount += (product.getPrice() * quantityToBuy);
         }
 
-        // B4: Hoàn thiện Order
+        // ========================================================================
+        // --- PHẦN TÍNH TOÁN VOUCHER (MỚI THÊM VÀO TẠI ĐÂY) ---
+        // ========================================================================
+        
+        double discountAmount = 0.0;
+        String voucherCode = request.getVoucherCode();
+
+        // Kiểm tra nếu có gửi mã voucher lên thì mới xử lý
+        if (voucherCode != null && !voucherCode.trim().isEmpty()) {
+            // 1. Tính tiền được giảm (Hàm này sẽ tự validate ngày, số lượng, min đơn hàng...)
+            discountAmount = voucherService.calculateDiscount(voucherCode, totalAmount);
+            
+            // 2. Trừ số lượng voucher đi 1 (Nếu đặt thành công)
+            voucherService.decreaseQuantity(voucherCode);
+        }
+
+        // 3. Tính tiền cuối cùng khách phải trả
+        double finalAmount = totalAmount - discountAmount;
+        if (finalAmount < 0) {
+            finalAmount = 0; // Đề phòng âm tiền
+        }
+
+        // ========================================================================
+        // --- KẾT THÚC PHẦN VOUCHER ---
+        // ========================================================================
+
+        // B4: Hoàn thiện Order (CẬP NHẬT CÁC GIÁ TRỊ TÀI CHÍNH)
         newOrder.setOrderItems(orderItems);
-        newOrder.setTotalAmount(totalAmount);
+        newOrder.setTotalAmount(totalAmount);       // Giá gốc (Tổng tiền hàng)
+        newOrder.setDiscountAmount(discountAmount); // Tiền được giảm (MỚI)
+        newOrder.setFinalAmount(finalAmount);       // Tiền thực trả (MỚI)
+        newOrder.setVoucherCode(voucherCode);       // Lưu mã voucher lại (MỚI)
         
         OrderEntity savedOrder = orderRepository.save(newOrder);
 
-        // B5: Xóa sạch giỏ hàng sau khi đặt thành công
+        // B5: Xóa sạch giỏ hàng sau khi đặt thành công (GIỮ NGUYÊN)
         cart.getItems().clear();
         cartRepository.save(cart);
 
@@ -346,6 +387,9 @@ private final OrderRepository orderRepository;
                 .orderDate(entity.getOrderDate())
                 .status(entity.getStatus().name())
                 .totalAmount(entity.getTotalAmount())
+                .discountAmount(entity.getDiscountAmount())
+                .finalAmount(entity.getFinalAmount())
+                .voucherCode(entity.getVoucherCode())
                 .shippingAddress(entity.getShippingAddress())
                 .phoneNumber(entity.getPhoneNumber())
                 .paymentMethod(entity.getPaymentMethod() != null ? entity.getPaymentMethod().name() : null)

@@ -60,4 +60,8 @@ public class AppointmentDTO extends BaseDTO {
     // --- 6. ĐÁNH GIÁ (Feedback) ---
     private Integer rating;
     private String feedbackComment;
+
+    private String voucherCode;
+    private Double discountAmount; 
+    private Double finalPrice;     
 }

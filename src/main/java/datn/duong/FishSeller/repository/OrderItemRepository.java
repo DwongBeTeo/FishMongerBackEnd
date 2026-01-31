@@ -24,4 +24,18 @@ public interface OrderItemRepository extends JpaRepository<OrderItemEntity, Long
            "GROUP BY i.product.id, i.product.name, i.product.imageUrl " +
            "ORDER BY SUM(i.quantity) DESC")
     List<TopProductDTO> findTopSellingProducts(Pageable pageable);
+
+    // Query tính tổng số lượng (quantity) của từng sản phẩm trong các đơn hàng ĐÃ HOÀN THÀNH
+    @Query("SELECT new datn.duong.FishSeller.dto.dashboard.TopProductDTO(" +
+           "  i.product.id, " +
+           "  i.product.name, " +
+           "  i.product.imageUrl, " +
+           "  SUM(i.quantity), " +
+           "  SUM(i.priceAtOrder * i.quantity) " +
+           ") " +
+           "FROM OrderItemEntity i " +
+           "WHERE i.order.status = 'COMPLETED' " + 
+           "GROUP BY i.product.id, i.product.name, i.product.imageUrl " +
+           "ORDER BY SUM(i.quantity) DESC")
+    List<TopProductDTO> findBestSellingProducts(Pageable pageable);
 }

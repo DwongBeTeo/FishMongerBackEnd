@@ -36,6 +36,7 @@ public class AppointmentService {
     private final AddressRepository addressRepository;
     private final UserService userService;
     private final EmailService emailService;
+    private final VoucherService voucherService;
 
     // =========================================================================
     // PHẦN 1: USER METHODS (Khách hàng)
@@ -107,6 +108,27 @@ public class AppointmentService {
             finalNote = "[Người nhận: " + recipientName + "] " + (finalNote != null ? finalNote : "");
         }
 
+        // ========================================================================
+        // F2. LOGIC TÍNH TOÁN VOUCHER
+        double originalPrice = service.getPrice(); // Giá gốc
+        double discountAmount = 0.0;
+        double finalPrice = originalPrice; // Mặc định bằng giá gốc nếu không có voucher
+        String voucherCode = dto.getVoucherCode();
+
+        // Kiểm tra nếu có gửi mã voucher
+        if (voucherCode != null && !voucherCode.trim().isEmpty()) {
+            // 1. Tính tiền được giảm (Hàm này tự validate logic voucher)
+            discountAmount = voucherService.calculateDiscount(voucherCode, originalPrice);
+            
+            // 2. Trừ số lượng voucher đi 1
+            voucherService.decreaseQuantity(voucherCode);
+            
+            // 3. Tính giá cuối cùng
+            finalPrice = originalPrice - discountAmount;
+            if (finalPrice < 0) finalPrice = 0;
+        }
+        // ========================================================================
+
         // G. Tạo Entity
         AppointmentEntity appointment = AppointmentEntity.builder()
                 .user(currentUser)
@@ -117,13 +139,16 @@ public class AppointmentService {
                 .expectedEndTime(endTime)
                 .address(finalAddress) // Địa chỉ đã chốt
                 .note(finalNote)      // Ghi chú đã gộp tên người nhận
-                .priceAtBooking(service.getPrice())
                 .status(AppointmentStatus.PENDING)
                 .paymentStatus(PaymentStatus.UNPAID)
+                .priceAtBooking(originalPrice)  // Giá gốc
+                .discountAmount(discountAmount) // Tiền giảm
+                .finalPrice(finalPrice)         // Tiền khách phải trả
+                .voucherCode(voucherCode)       // Mã voucher đã dùng
                 .build();
-
         return toDTO(appointmentRepository.save(appointment));
     }
+
     // 2. User gửi yêu cầu Hủy lịch
     @Transactional
     public void requestCancelBooking(Long appointmentId, String reason) {
@@ -379,6 +404,9 @@ public class AppointmentService {
                 .address(entity.getAddress())
                 .note(entity.getNote())
                 .priceAtBooking(entity.getPriceAtBooking())
+                .discountAmount(entity.getDiscountAmount())
+                .finalPrice(entity.getFinalPrice())
+                .voucherCode(entity.getVoucherCode())
                 .status(entity.getStatus())
                 .paymentStatus(entity.getPaymentStatus())
                 .cancellationReason(entity.getCancellationReason())

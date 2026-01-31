@@ -58,4 +58,8 @@ public class AppointmentEntity extends BaseEntity{
     private Integer rating;
     @Column(name = "feedback_comment", columnDefinition = "TEXT")
     private String feedbackComment;
+
+    private Double discountAmount; // Số tiền được giảm
+    private Double finalPrice;     // Số tiền khách thực trả
+    private String voucherCode;    // Mã voucher đã dùng
 }

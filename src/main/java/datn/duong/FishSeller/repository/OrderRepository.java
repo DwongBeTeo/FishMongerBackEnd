@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import datn.duong.FishSeller.dto.dashboard.DailyRevenueDTO;
+import datn.duong.FishSeller.dto.dashboard.VoucherStatsDTO;
 import datn.duong.FishSeller.entity.OrderEntity;
 
 public interface OrderRepository extends JpaRepository<OrderEntity, Long>{
@@ -40,4 +41,16 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long>{
     // Kết quả trả về dạng: [ ["PENDING", 5], ["COMPLETED", 10] ]
     @Query("SELECT o.status, COUNT(o) FROM OrderEntity o GROUP BY o.status")
     List<Object[]> countOrdersByStatus();
+
+    // 5. Thống kê hiệu quả của 1 Voucher (Chỉ tính đơn COMPLETED)
+    @Query("SELECT new datn.duong.FishSeller.dto.dashboard.VoucherStatsDTO(" +
+           "  o.voucherCode, " +
+           "  COUNT(o), " +
+           "  COALESCE(SUM(o.finalAmount), 0), " +
+           "  COALESCE(SUM(o.discountAmount), 0) " +
+           ") " +
+           "FROM OrderEntity o " +
+           "WHERE o.voucherCode = :code AND o.status = 'COMPLETED' " +
+           "GROUP BY o.voucherCode")
+    VoucherStatsDTO getVoucherStatistics(@Param("code") String code);
 }

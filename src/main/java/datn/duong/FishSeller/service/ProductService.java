@@ -9,9 +9,11 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
 import datn.duong.FishSeller.dto.ProductDTO;
+import datn.duong.FishSeller.dto.dashboard.TopProductDTO;
 import datn.duong.FishSeller.entity.CategoryEntity;
 import datn.duong.FishSeller.entity.ProductEntity;
 import datn.duong.FishSeller.repository.CategoryRepository;
+import datn.duong.FishSeller.repository.OrderItemRepository;
 import datn.duong.FishSeller.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -19,8 +21,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ProductService {
     private final ProductRepository productRepository;
-
     private final CategoryRepository categoryRepository;
+    private final OrderItemRepository orderItemRepository;
 
     // =========================================================================
     // PHẦN 1: PUBLIC METHODS (Dành cho Guest & User - Chỉ hiện AVAILABLE)
@@ -62,11 +64,15 @@ public class ProductService {
         return toDTO(product);
     }
 
-    // [MỚI] 6. Xem chi tiết theo SLUG (Dùng cho trang chi tiết sản phẩm chuẩn SEO)
+    // 6. Xem chi tiết theo SLUG (Dùng cho trang chi tiết sản phẩm chuẩn SEO)
     public ProductDTO getProductDetailBySlug(String slug) {
         ProductEntity product = productRepository.findBySlugAndStatus(slug, "AVAILABLE")
                 .orElseThrow(() -> new RuntimeException("Product not found (Slug: " + slug + ")"));
         return toDTO(product);
+    }
+    // 7. Lấy danh sách Top bán chạy (limit số lượng)
+    public List<TopProductDTO> getTopSellingProducts(int limit) {
+        return orderItemRepository.findBestSellingProducts(PageRequest.of(0, limit));
     }
 
     // =========================================================================

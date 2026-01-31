@@ -18,4 +18,5 @@ public class UserDTO extends BaseDTO {
     private String phoneNumber;
     private String role;
     private String address;
+    private String profileImageUrl;
 }

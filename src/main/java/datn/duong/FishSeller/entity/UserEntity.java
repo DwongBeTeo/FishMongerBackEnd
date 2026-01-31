@@ -38,6 +38,8 @@ public class UserEntity extends BaseEntity {
     private String phoneNumber;
 
     private String address;
+    @Column(name = "profile_image_url")
+    private String profileImageUrl;
 
     @Column(name = "is_active")
     private Boolean isActive;

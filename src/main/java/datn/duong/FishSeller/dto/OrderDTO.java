@@ -21,4 +21,7 @@ public class OrderDTO {
     private boolean cancellationRequested; // Để FE hiển thị thông báo "Đang chờ admin duyệt hủy"
     private String paymentMethod;
     private String paymentStatus;
+    private Double discountAmount; // Tiền giảm
+    private Double finalAmount;    // Tiền khách phải trả
+    private String voucherCode;     // Mã voucher đã dùng
 }

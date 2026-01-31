@@ -11,4 +11,5 @@ public class OrderCreationRequest {
     // Không cần list sản phẩm, vì sẽ lấy từ Cart của user hiện tại
     // Frontend gửi string "COD" hoặc "BANKING"
     private PaymentMethod paymentMethod;
+    private String voucherCode;
 }
