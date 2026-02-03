@@ -32,7 +32,7 @@ public class UserEntity extends BaseEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(name = "full_name") // Mapping tên biến camelCase sang snake_case trong DB
+    @Column(name = "full_name")
     private String fullName;
 
     private String phoneNumber;
