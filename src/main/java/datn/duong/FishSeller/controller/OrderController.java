@@ -2,6 +2,7 @@ package datn.duong.FishSeller.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,8 +27,13 @@ public class OrderController {
     // 2. Xem danh sách đơn hàng của tôi
     // GET: /orders
     @GetMapping
-    public ResponseEntity<List<OrderDTO>> getMyOrders() {
-        return ResponseEntity.ok(orderService.getMyOrders());
+    public ResponseEntity<Page<OrderDTO>> getMyOrders(
+        @RequestParam(defaultValue = "0") int page, 
+        @RequestParam(defaultValue = "5") int size) {
+            if (size >5) {
+                size =5;
+            }
+        return ResponseEntity.ok(orderService.getMyOrders(page, size));
     }
 
     // 3. Xem chi tiết 1 đơn hàng

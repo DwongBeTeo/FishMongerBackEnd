@@ -7,7 +7,12 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,13 +36,15 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class OrderService {
-private final OrderRepository orderRepository;
+    private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
     private final ProductRepository productRepository; // Cần để trừ tồn kho
     private final UserRepository userRepository;
     private final UserService userService;
     private final EmailService emailService;
     private final VoucherService voucherService;
+
+    private final NotificationService notificationService;
 
     // ========================================================================
     // PHẦN DÀNH CHO ADMIN
@@ -96,7 +103,15 @@ private final OrderRepository orderRepository;
 
         order.setStatus(newStatus);
         OrderEntity savedOrder = orderRepository.save(order);
-        return toDTO(savedOrder);
+        OrderDTO responseDTO = toDTO(savedOrder);
+        // --- PHẦN MỚI: GỬI THÔNG BÁO REAL-TIME ---
+        // GỬI REAL-TIME cho USER: Khi admin đổi trạng thái đơn hàng
+        notificationService.sendPrivateNotification(
+            order.getUser().getId(), 
+            "/orders", 
+            responseDTO
+        );
+        return responseDTO;
     }
 
     // 3. ADMIN:XỬ LÝ YÊU CẦU HỦY (DUYỆT HOẶC TỪ CHỐI)
@@ -135,8 +150,13 @@ private final OrderRepository orderRepository;
 
         // Dù đồng ý hay từ chối thì cũng reset cờ này về false (đã xử lý xong)
         order.setCancellationRequested(false); 
-        
-        return toDTO(orderRepository.save(order));
+        OrderEntity savedOrder =orderRepository.save(order);
+        OrderDTO dto = toDTO(savedOrder);
+        notificationService.sendPrivateNotification(
+            order.getUser().getId(),
+            "/orders",
+            dto);
+        return dto;
     }
 
     // 4: ADMIN: xem chi tiết đơn hàng
@@ -220,8 +240,7 @@ private final OrderRepository orderRepository;
         }
 
         // ========================================================================
-        // --- PHẦN TÍNH TOÁN VOUCHER (MỚI THÊM VÀO TẠI ĐÂY) ---
-        // ========================================================================
+        //PHẦN TÍNH TOÁN VOUCHER
         
         double discountAmount = 0.0;
         String voucherCode = request.getVoucherCode();
@@ -258,8 +277,11 @@ private final OrderRepository orderRepository;
         cart.getItems().clear();
         cartRepository.save(cart);
 
-        // B6: Trả về DTO
-        return toDTO(savedOrder);
+        OrderDTO dto = toDTO(savedOrder);
+
+        // REAL-TIME: Thông báo cho toàn bộ Admin có đơn hàng mới
+        notificationService.sendAdminNotification("/orders", dto);
+        return dto;
     }
 
     // 2. HỦY ĐƠN HÀNG
@@ -288,22 +310,28 @@ private final OrderRepository orderRepository;
         // Case2: Đang chuẩn bị hoặc đang giao -> Gửi yêu cầu hủy
         if(order.getStatus() == OrderStatus.PREPARING || order.getStatus() == OrderStatus.SHIPPING || order.getStatus() == OrderStatus.PENDING) {
             order.setCancellationRequested(true);// Bật cờ
-            return toDTO(orderRepository.save(order));
+            OrderEntity savedOrder = orderRepository.save(order);
+            OrderDTO dto = toDTO(savedOrder);
+
+            // REAL-TIME: Thông báo cho Admin biết User vừa nhấn "Yêu cầu hủy"
+            notificationService.sendAdminNotification("/orders", dto);
+            
+            return dto;
         }
         restoreStock(order);
 
         //Case 3: Đã xong hoặc đã hủy -> Lỗi
         throw new RuntimeException("Không thể hủy đơn hàng đã hoàn thành hoặc đã bị hủy.");
+        
     }
 
     // 3. XEM DANH SÁCH ĐƠN HÀNG CỦA TÔI
-    public List<OrderDTO> getMyOrders() {
+    public Page<OrderDTO> getMyOrders(int page, int size) {
         UserEntity currentUser = userService.getCurrentProfile();
-        List<OrderEntity> orders = orderRepository.findByUserId(currentUser.getId());
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "orderDate"));
+        Page<OrderEntity> orders = orderRepository.findByUserId(currentUser.getId(), pageable);
         
-        return orders.stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        return orders.map(this::toDTO);
     }
 
     // 4. XEM CHI TIẾT 1 ĐƠN HÀNG

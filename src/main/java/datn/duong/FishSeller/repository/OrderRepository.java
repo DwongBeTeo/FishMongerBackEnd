@@ -3,16 +3,17 @@ package datn.duong.FishSeller.repository;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import datn.duong.FishSeller.dto.dashboard.DailyRevenueDTO;
 import datn.duong.FishSeller.dto.dashboard.VoucherStatsDTO;
 import datn.duong.FishSeller.entity.OrderEntity;
 
 public interface OrderRepository extends JpaRepository<OrderEntity, Long>{
-    List<OrderEntity> findByUserId(Long userId); // Lịch sử mua hàng
+    Page<OrderEntity> findByUserId(Long userId, Pageable pageable); // Lịch sử mua hàng
 
     // Tìm đơn hàng của user có email chứa từ khóa (IgnoreCase: không phân biệt hoa thường)
     // Sắp xếp ngày mới nhất lên đầu

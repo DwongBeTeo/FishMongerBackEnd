@@ -37,6 +37,7 @@ public class AppointmentService {
     private final UserService userService;
     private final EmailService emailService;
     private final VoucherService voucherService;
+    private final NotificationService notificationService;
 
     // =========================================================================
     // PHẦN 1: USER METHODS (Khách hàng)
@@ -146,7 +147,14 @@ public class AppointmentService {
                 .finalPrice(finalPrice)         // Tiền khách phải trả
                 .voucherCode(voucherCode)       // Mã voucher đã dùng
                 .build();
-        return toDTO(appointmentRepository.save(appointment));
+
+        AppointmentEntity savedAppt = appointmentRepository.save(appointment);
+        AppointmentDTO resultDto = toDTO(savedAppt);
+
+        // REAL-TIME: Thông báo cho Admin có lịch hẹn mới cần phân công
+        notificationService.sendAdminNotification("/appointments", resultDto);
+
+        return resultDto;
     }
 
     // 2. User gửi yêu cầu Hủy lịch
@@ -171,7 +179,11 @@ public class AppointmentService {
         appointment.setStatus(AppointmentStatus.CANCEL_REQUESTED);
         appointment.setCancellationReason("Khách yêu cầu hủy: " + reason);
         
-        appointmentRepository.save(appointment);
+        AppointmentEntity savedAppt = appointmentRepository.save(appointment);
+        AppointmentDTO dto = toDTO(savedAppt); // Convert sang DTO
+
+        // REAL-TIME: Thông báo Admin duyệt yêu cầu hủy
+        notificationService.sendAdminNotification("/appointments", dto);
     }
 
     // 3. Xem lịch sử của TÔI
@@ -254,7 +266,13 @@ public class AppointmentService {
 
         appointment.setEmployee(employee);
         appointment.setStatus(AppointmentStatus.CONFIRMED); // Chuyển sang đã xác nhận
-        return toDTO(appointmentRepository.save(appointment));
+        AppointmentEntity savedAppt = appointmentRepository.save(appointment);
+        AppointmentDTO resultDto = toDTO(savedAppt);
+
+        // REAL-TIME: Thông báo cho User lịch của họ đã được xác nhận (CONFIRMED)
+        notificationService.sendPrivateNotification(savedAppt.getUser().getId(), "/appointments", resultDto);
+
+        return resultDto;
     }
     
     // 6. Admin cập nhật trạng thái (Ví dụ: Đã xong, Đã hủy)
@@ -267,7 +285,11 @@ public class AppointmentService {
         if (status == AppointmentStatus.COMPLETED) {
             appointment.setPaymentStatus(PaymentStatus.PAID); // Giả sử xong là thanh toán luôn
         }
-        return toDTO(appointmentRepository.save(appointment));
+
+        AppointmentEntity savedAppt = appointmentRepository.save(appointment);
+        AppointmentDTO dto = toDTO(savedAppt);
+        notificationService.sendPrivateNotification(savedAppt.getUser().getId(), "/appointments", dto);
+        return dto;
     }
 
     // 7. Admin lấy danh sách (Có tìm kiếm + Lọc status)
@@ -309,7 +331,13 @@ public class AppointmentService {
                 "Yêu cầu hủy lịch hẹn #" + id + " bị từ chối", 
                 rejectMsg);
         }
-        return toDTO(appointmentRepository.save(appt));
+        AppointmentEntity savedAppt = appointmentRepository.save(appt);
+        AppointmentDTO resultDto = toDTO(savedAppt);
+
+        // REAL-TIME: Thông báo kết quả duyệt hủy cho User
+        notificationService.sendPrivateNotification(savedAppt.getUser().getId(), "/appointments", resultDto);
+
+        return resultDto;
     }
 
     //  9. ADMIN CHỦ ĐỘNG HỦY LỊCH
@@ -332,7 +360,13 @@ public class AppointmentService {
             "Thông báo hủy lịch hẹn #" + id, 
             "Chúng tôi rất tiếc phải thông báo lịch hẹn của bạn đã bị hủy bởi Admin.<br/><b>Lý do:</b> " + finalReason);
 
-        return toDTO(appointmentRepository.save(appt));
+        AppointmentEntity savedAppt = appointmentRepository.save(appt);
+        AppointmentDTO dto = toDTO(savedAppt);
+
+        // REAL-TIME: Thông báo kết quả duyệt hủy cho User
+        notificationService.sendPrivateNotification(savedAppt.getUser().getId(), "/appointments", dto);
+
+        return dto;
     }
 
     // =========================================================================
