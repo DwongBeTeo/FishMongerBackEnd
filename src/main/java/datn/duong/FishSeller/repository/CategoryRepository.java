@@ -23,6 +23,10 @@ public interface CategoryRepository extends JpaRepository<CategoryEntity, Long> 
 
     List<CategoryEntity> findByParentIsNotNullAndType(String type);
 
+    List<CategoryEntity> findByParentIsNullAndType(String type);
+
+    List<CategoryEntity> findByParentIsNull();
+
     // Hàm lấy tất cả cho Admin (Bỏ qua @Where/Soft Delete bằng nativeQuery)
     @Query(value = "SELECT * FROM categories ORDER BY id DESC", nativeQuery = true)
     List<CategoryEntity> findAllForAdminRaw();

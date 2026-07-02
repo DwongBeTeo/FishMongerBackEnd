@@ -23,7 +23,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // Client sẽ lắng nghe dữ liệu tại các prefix bắt đầu bằng /topic
         registry.enableSimpleBroker("/topic");
         
-        // Client gửi dữ liệu lên server sẽ bắt đầu bằng /app (nếu cần)
+        // Client gửi dữ liệu lên server sẽ bắt đầu bằng /app
         registry.setApplicationDestinationPrefixes("/app");
     }
 }

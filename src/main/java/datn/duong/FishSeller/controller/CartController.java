@@ -42,7 +42,7 @@ public class CartController {
 
     // 3. CẬP NHẬT SỐ LƯỢNG (Tăng/Giảm)
     // URL: http://localhost:8080/api/cart/items/{cartItemId}?quantity=5
-    // Ví dụ: http://localhost:8080/api/cart/items/10?quantity=5
+    // http://localhost:8080/api/cart/items/10?quantity=5
     // Note: cartItemId là ID của dòng trong giỏ hàng, không phải ID sản phẩm
     @PutMapping("/items/{cartItemId}")
     public ResponseEntity<CartDTO> updateItemQuantity(
@@ -53,7 +53,6 @@ public class CartController {
 
     // 4. XÓA 1 SẢN PHẨM KHỎI GIỎ
     // URL: http://localhost:8080/api/cart/items/{cartItemId}
-    // Ví dụ: http://localhost:8080/api/cart/items/10
     @DeleteMapping("/items/{cartItemId}")
     public ResponseEntity<CartDTO> removeItem(@PathVariable Long cartItemId) {
         return ResponseEntity.ok(cartService.removeFromCart(cartItemId));

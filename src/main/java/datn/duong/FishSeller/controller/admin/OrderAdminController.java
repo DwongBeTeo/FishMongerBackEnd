@@ -28,7 +28,7 @@ public class OrderAdminController {
  
     // 2. Admin cập nhật trạng thái (Dùng để DUYỆT hoặc HỦY đơn khách)
     // PUT: /{orderId}/status?status=CANCELLED
-    // status có thể là: SHIPPING, COMPLETED, CANCELLED
+    // status: SHIPPING, COMPLETED, CANCELLED
     @PutMapping("/{orderId}/status")
     public ResponseEntity<OrderDTO> updateOrderStatus(
             @PathVariable Long orderId, 

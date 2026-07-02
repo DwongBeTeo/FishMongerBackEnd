@@ -104,9 +104,9 @@ public class CartService {
         if (quantity <= 0) {
             // Nếu số lượng <= 0 thì xóa luôn item đó
             cart.getItems().remove(item);
-            cartItemRepository.delete(item); // Xóa cứng để đảm bảo DB đồng bộ
+            cartItemRepository.delete(item); // Xóa cứng để DB đồng bộ
         } else {
-            // QUAN TRỌNG: Kiểm tra tồn kho trước khi cập nhật
+            //Kiểm tra tồn kho trước khi cập nhật
             if (quantity > item.getProduct().getStockQuantity()) {
                 throw new RuntimeException("Sản phẩm không đủ hàng. Kho chỉ còn: " 
                                            + item.getProduct().getStockQuantity());
@@ -130,7 +130,6 @@ public class CartService {
             throw new RuntimeException("Item not found in cart to remove");
         }
 
-        // Vì orphanRemoval=true, khi save Cart, JPA tự động xóa record bên bảng cart_items
         CartEntity savedCart = cartRepository.save(cart);
         return toDTO(savedCart);
     }
@@ -142,7 +141,7 @@ public class CartService {
         CartEntity cart = getOrCreateCart(user);
         
         cart.getItems().clear(); // Xóa hết list
-        cartRepository.save(cart); // JPA tự delete hết trong DB
+        cartRepository.save(cart);
     }
 
     // --- Private Helper Methods ---
@@ -198,11 +197,7 @@ public class CartService {
     }
 
     // 2. Chuyển từ DTO sang Entity (Để lưu DB)
-    // Lưu ý: Với Cart, thường chúng ta không map nguyên cục CartDTO to sang Entity
-    // mà chỉ map từng phần nhỏ từ request (như AddToCartRequest) vào Entity có sẵn.
-    // Tuy nhiên, đây là ví dụ nếu bạn muốn convert ngược một CartItemRequest thành CartItemEntity mới.
-    
-    // Ví dụ method này dùng để tạo mới Entity từ request add
+
     private CartItemEntity toEntity(AddToCartRequest request, CartEntity cart, ProductEntity product) {
         CartItemEntity entity = new CartItemEntity();
         entity.setCart(cart);

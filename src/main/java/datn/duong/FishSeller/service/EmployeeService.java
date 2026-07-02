@@ -84,9 +84,6 @@ public class EmployeeService {
         employee.setPhoneNumber(dto.getPhoneNumber());
         employee.setStatus(dto.getStatus());
 
-        // Lưu ý: Thường ta KHÔNG cho phép đổi User ID của nhân viên sau khi đã tạo
-        // để tránh lỗi dữ liệu lịch sử. Nên không set user ở đây.
-
         return toDTO(employeeRepository.save(employee));
     }
 
@@ -138,7 +135,6 @@ public class EmployeeService {
                 .fullName(dto.getFullName())
                 .phoneNumber(dto.getPhoneNumber())
                 .status(dto.getStatus())
-                // User sẽ được set riêng trong hàm create
                 .build();
     }
 }

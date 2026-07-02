@@ -52,6 +52,9 @@ public class CategoryEntity extends BaseEntity {
     @Column(name = "meta_keyword")
     private String metaKeyword;
 
+    @Column(name = "image_url")
+    private String imageUrl;
+
     // // 1. Tự động lấy thời gian lúc Insert
     // // updatable = false: Để khi update danh mục, ngày tạo không bị đổi
     // @CreationTimestamp

@@ -19,14 +19,13 @@ import lombok.RequiredArgsConstructor;
 public class CategoryService {
     private final CategoryRepository categoryRepository;
 
-    // PHẦN 1: PUBLIC METHODS (Ai cũng dùng được: Khách, User, Admin)
-    // (QUAN TRỌNG: Cần @Transactional cho Lazy Loading)
+    // PHẦN 1: PUBLIC METHODS
     // 1. Lấy tất cả danh mục
     @Transactional(readOnly = true)
     public List<CategoryDTO> getAllCategoriesForAdmin(String keyword) {
         List<CategoryEntity> categories;
 
-        // Nếu có từ khóa tìm kiếm -> Gọi hàm tìm kiếm Native (tìm cả đã xóa)
+        // Nếu có từ khóa tìm kiếm -> Gọi hàm tìm kiếm Native
         if (keyword != null && !keyword.trim().isEmpty()) {
             categories = categoryRepository.searchForAdminRaw(keyword.trim());
         } 
@@ -44,9 +43,20 @@ public class CategoryService {
     @Transactional(readOnly = true)
     public List<CategoryDTO> getAllCategoriesForMenu(String type) {
         // Chỉ lấy gốc, sau đó đệ quy lấy con
-        List<CategoryEntity> rootCategories = categoryRepository.findByParentIsNotNullAndType(type);
-        return rootCategories.stream()
-                .map(category -> toDTO(category, true)) // true: Cần load con đệ quy
+        List<CategoryEntity> categories;
+
+        // 1. LUỒNG CỦA WEB: Web có truyền type (VD: "FISH")
+        if (type != null && !type.trim().isEmpty()) {
+            categories = categoryRepository.findByParentIsNotNullAndType(type);
+        } 
+        // 2. LUỒNG CỦA MOBILE APP: App gọi API không truyền type
+        else {
+            // Lấy tất cả các danh mục gốc (Cá, Bể cá, Thức ăn...)
+            categories = categoryRepository.findByParentIsNull();
+        }
+
+        return categories.stream()
+                .map(category -> toDTO(category, true))
                 .collect(Collectors.toList());
     }
 
@@ -57,7 +67,7 @@ public class CategoryService {
         return toDTO(category,true);
     }
 
-    // PHẦN 2: ADMIN METHODS (Chỉ Admin dùng: Thêm, Sửa, Xóa)
+    // PHẦN 2: ADMIN METHODS
     // 3. Tạo danh mục mới
     public CategoryDTO createCategory(CategoryDTO categoryDTO) {
         // Kiểm tra trùng tên
@@ -65,7 +75,7 @@ public class CategoryService {
             throw new RuntimeException("Category with name '" + categoryDTO.getName() + "' already exists");
         }
 
-        // Xử lý SLUG (Quan trọng)
+        // Xử lý SLUG
         String slug = categoryDTO.getSlug();
         if (slug == null || slug.trim().isEmpty()) {
             // Nếu không nhập slug -> Tự tạo từ Name
@@ -80,7 +90,7 @@ public class CategoryService {
         CategoryEntity newCategory = toEntity(categoryDTO);
         newCategory.setSlug(slug); // Set slug đã xử lý
 
-        // Xử lý logic gán Cha (Parent) - Phần này toEntity không làm được
+        // Xử lý logic gán Cha (Parent)
         if (categoryDTO.getParentId() != null) {
             CategoryEntity parent = categoryRepository.findById(categoryDTO.getParentId())
                     .orElseThrow(() -> new RuntimeException("Parent category not found"));
@@ -98,7 +108,7 @@ public class CategoryService {
         // Cập nhật thông tin
         existingCategory.setName(categoryDTO.getName());
         existingCategory.setDescription(categoryDTO.getDescription());
-
+        existingCategory.setImageUrl(categoryDTO.getImageUrl());
         existingCategory.setType(categoryDTO.getType());
         existingCategory.setMetaTitle(categoryDTO.getMetaTitle());
         existingCategory.setMetaKeyword(categoryDTO.getMetaKeyword());
@@ -162,7 +172,7 @@ public class CategoryService {
             throw new RuntimeException("Danh mục này chưa bị xóa, không cần khôi phục!");
         }
 
-        //Logic nghiệp vụ nâng cao - Kiểm tra cha
+        // Kiểm tra cha
         // Nếu danh mục này có cha, và cha đang bị xóa, thì không thể khôi phục con "mồ côi"
         if (category.getParent() != null) {
             CategoryEntity parent = categoryRepository.findByIdIncludingDeleted(category.getParent().getId())
@@ -194,12 +204,11 @@ public class CategoryService {
         return CategoryEntity.builder()
                 .name(categoryDTO.getName())
                 .description(categoryDTO.getDescription())
+                .imageUrl(categoryDTO.getImageUrl())
                 .type(categoryDTO.getType())
                 .metaTitle(categoryDTO.getMetaTitle())
                 .metaKeyword(categoryDTO.getMetaKeyword())
                 .isDeleted(false)
-                // Không map parentId ở đây vì Entity cần Object Parent,
-                // việc tìm Parent phải dùng Repository ở Service chính.
                 .build();
     }
 
@@ -210,6 +219,7 @@ public class CategoryService {
                 .id(entity.getId())
                 .name(entity.getName())
                 .description(entity.getDescription())
+                .imageUrl(entity.getImageUrl())
                 .createdDate(entity.getCreatedDate())
                 .updatedDate(entity.getUpdatedDate())
                 .isDeleted(entity.getIsDeleted())
@@ -217,7 +227,6 @@ public class CategoryService {
                 .slug(entity.getSlug())
                 .metaTitle(entity.getMetaTitle())
                 .metaKeyword(entity.getMetaKeyword())
-                // Lấy thông tin cha (để hiển thị trên bảng Admin)
                 .parentId(entity.getParent() != null ? entity.getParent().getId() : null)
                 .parentName(entity.getParent() != null ? entity.getParent().getName() : null);
 

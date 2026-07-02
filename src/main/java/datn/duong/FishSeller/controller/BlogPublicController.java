@@ -37,7 +37,6 @@ public class BlogPublicController {
             @RequestParam(required = false) Long categoryId
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdDate").descending());
-        // Bạn cần viết thêm hàm getPostsPublic trong Service để gọi Repository
         // Hàm này chỉ lấy bài có isActive = true
         return ResponseEntity.ok(blogPostService.getPublicPosts(categoryId, pageable));
     }

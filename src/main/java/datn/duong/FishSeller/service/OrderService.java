@@ -26,6 +26,7 @@ import datn.duong.FishSeller.entity.OrderItemEntity;
 import datn.duong.FishSeller.entity.ProductEntity;
 import datn.duong.FishSeller.entity.UserEntity;
 import datn.duong.FishSeller.enums.OrderStatus;
+import datn.duong.FishSeller.enums.PaymentMethod;
 import datn.duong.FishSeller.enums.PaymentStatus;
 import datn.duong.FishSeller.repository.CartRepository;
 import datn.duong.FishSeller.repository.OrderRepository;
@@ -72,12 +73,19 @@ public class OrderService {
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
-        if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.COMPLETED) {
-            throw new RuntimeException("Không thể thay đổi trạng thái đơn hàng đã Hoàn thành hoặc đã Hủy.");
+        // if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.COMPLETED) {
+        //     throw new RuntimeException("Không thể thay đổi trạng thái đơn hàng đã Hoàn thành hoặc đã Hủy.");
+        // }
+
+        OrderStatus oldStatus = order.getStatus();
+        // Nếu trạng thái không thay đổi gì thì return luôn cho nhanh
+        if (oldStatus == newStatus) {
+            return toDTO(order);
         }
 
+        // LOGIC XỬ LÝ KHO (QUAN TRỌNG NHẤT)
+        // ===============================
         // LOGIC 1: Nếu Admin chuyển sang trạng thái CANCELLED (Hủy)
-        // -> Phải hoàn lại tồn kho (Giống hệt logic user tự hủy)
         if (newStatus == OrderStatus.CANCELLED) {
             restoreStock(order);
             order.setCancellationRequested(false); // Reset cờ yêu cầu (nếu có) vì đơn đã hủy rồi
@@ -88,17 +96,35 @@ public class OrderService {
                 "Đơn hàng <b>#" + order.getId() + "</b> đã bị hủy bởi Admin vì lý do hết hàng hoặc sự cố vận hành."
             );
         }
+
+        // Logic 2: KHÔI PHỤC ĐƠN ĐÃ HỦY -> Trừ lại kho 
+        if (oldStatus == OrderStatus.CANCELLED && newStatus != OrderStatus.CANCELLED) {
+            // Khi khôi phục từ Hủy -> Phải kiểm tra xem còn hàng để trừ không?
+            deductStock(order);
+        }
+
         // LOGIC 3: tư động cập nhật trạng thái thanh toán Thông báo khi đơn hàng Giao thành công 
         if (newStatus == OrderStatus.COMPLETED) {
             if(order.getPaymentStatus()==PaymentStatus.UNPAID){
                 order.setPaymentStatus(PaymentStatus.PAID);
             }
-
-             sendNotificationToUser(
+            // order.setPaymentDate(LocalDateTime.now()); // Ghi nhận ngày thanh toán (để tạm ở đây để upgrade dự án)
+            sendNotificationToUser(
                 order.getUser(),
                 "Đơn hàng #" + order.getId() + " đã hoàn thành",
                 "Cảm ơn bạn đã mua sắm tại Cá Cảnh Shop. Đơn hàng <b>#" + order.getId() + "</b> đã được giao thành công."
             );
+        }
+
+        // CASE D: KHÔI PHỤC TỪ HOÀN THÀNH VỀ TRẠNG THÁI TRƯỚC (Sửa sai bấm nhầm Complete)
+        if (oldStatus == OrderStatus.COMPLETED && newStatus != OrderStatus.COMPLETED) {
+            // Tùy chọn: Có muốn chuyển về UNPAID không?
+            // Thường thì nếu COD (Thanh toán khi nhận) thì nên chuyển về UNPAID.
+            if (order.getPaymentMethod() == PaymentMethod.COD) {
+                order.setPaymentStatus(PaymentStatus.UNPAID);
+                // order.setPaymentDate(null); // upgrade trong tương lai
+            }
+            // Nếu là VNPAY/Chuyển khoản thì giữ nguyên PAID
         }
 
         order.setStatus(newStatus);
@@ -363,6 +389,24 @@ public class OrderService {
             // Cập nhật và lưu
             product.setStockQuantity(currentStock + quantityToRestore);
             productRepository.save(product);
+        }
+    }
+
+    // Hàm trừ kho (Dùng khi KHÔI PHỤC đơn hàng đã hủy)
+    private void deductStock(OrderEntity order) {
+        for (OrderItemEntity item : order.getOrderItems()) {
+            ProductEntity product = item.getProduct();
+            int quantityToDeduct = item.getQuantity();
+
+            // Kiểm tra xem kho còn đủ hàng để khôi phục không?
+            if (product.getStockQuantity() < quantityToDeduct) {
+                throw new RuntimeException("Không thể khôi phục đơn hàng! Sản phẩm '" + 
+                    product.getName() + "' hiện không đủ tồn kho (Còn: " + product.getStockQuantity() + ")");
+            }
+
+            // Trừ kho
+            // Nên dùng repo custom query như tôi từng hướng dẫn để tránh deadlock
+            productRepository.decreaseStock(product.getId(), quantityToDeduct);
         }
     }
 

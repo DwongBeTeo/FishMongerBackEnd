@@ -22,7 +22,6 @@ public class ServiceTypeController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        // SECURITY CHECK: không cho phép lấy quá 10 sản phẩm(tránh bị tấn công thông qua postman)
         if (size > 10) {
             size = 10;
         }

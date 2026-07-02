@@ -164,6 +164,7 @@ public class UserService {
                 .address(currentUser.getAddress())
                 .phoneNumber(currentUser.getPhoneNumber())
                 .profileImageUrl(currentUser.getProfileImageUrl())
+                .role(currentUser.getRole().getName())
                 .build();
     }
     // METHOD UPDATE PROFILE ---
@@ -172,7 +173,6 @@ public class UserService {
         UserEntity currentUser = getCurrentProfile();
 
         // 2. Cập nhật các thông tin cho phép
-        // Lưu ý: Không cập nhật Email, Username, CreatedDate, Role, Password tại đây
         
         if (requestDTO.getFullName() != null) {
             currentUser.setFullName(requestDTO.getFullName());
@@ -208,7 +208,7 @@ public class UserService {
     // 1. ĐỔI MẬT KHẨU (Change Password) - Đã login
     // =========================================================================
     public void changePassword(ChangePasswordDTO request) {
-        UserEntity user = getCurrentProfile(); // Lấy user từ Security Context
+        UserEntity user = getCurrentProfile();
 
         // 1. Check mật khẩu cũ có đúng không
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
@@ -226,7 +226,7 @@ public class UserService {
     }
 
     // =========================================================================
-    // 2. QUÊN MẬT KHẨU (Forgot Password) - Bước 1: Gửi otp
+    // 2. QUÊN MẬT KHẨU (Forgot Password) Gửi otp
     // =========================================================================
     public void requestPasswordReset(String email) {
         UserEntity user = userRepository.findByEmail(email)
@@ -249,7 +249,7 @@ public class UserService {
     }
 
     // =========================================================================
-    // 3. ĐẶT LẠI MẬT KHẨU (Reset Password) - Bước 2: Xác nhận Token & Đổi pass
+    // 3. ĐẶT LẠI MẬT KHẨU (Reset Password) Xác nhận Token & Đổi pass
     // =========================================================================
     public void resetPassword(ResetPasswordDTO request) {
         // 1. Tìm User theo Email trước (Thay vì tìm theo Token)
@@ -257,7 +257,6 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
 
         // 2. Tìm Token/OTP trong DB dựa trên User
-        // Bạn cần thêm method findByUser vào PasswordResetTokenRepository hoặc dùng cách dưới nếu Entity có quan hệ
         PasswordResetTokenEntity resetToken = passwordResetTokenRepository.findByUser(user) // Cần viết thêm hàm này trong Repo
                 .orElseThrow(() -> new RuntimeException("Bạn chưa yêu cầu gửi mã OTP"));
 

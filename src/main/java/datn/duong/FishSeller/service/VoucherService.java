@@ -24,6 +24,7 @@ public class VoucherService {
 
     private final VoucherRepository voucherRepository;
     private final OrderRepository orderRepository;
+    private final NotificationService notificationService;
 
     // USER / GUEST METHODS (Khách hàng)
     // Lấy danh sách voucher "ngon" đang có để hiển thị ở trang chủ hoặc trang Cart
@@ -59,42 +60,60 @@ public class VoucherService {
         return voucherRepository.findAll(pageable);
     }
 
-    // Tạo mới
     @Transactional
     public VoucherEntity createVoucher(VoucherEntity voucher) {
+        System.out.println("========== DEBUG CREATE VOUCHER ==========");
+        System.out.println("1. Bắt đầu tạo voucher...");
+
         // LOGIC 1: Xử lý Mã Voucher
         if (voucher.getCode() == null || voucher.getCode().trim().isEmpty()) {
-            // Trường hợp Admin muốn tự sinh mã (VD: Mã dài 8 ký tự)
             String generatedCode = "";
-            // Vòng lặp do-while để đảm bảo sinh ra mã chưa từng tồn tại (tránh trùng lặp)
             do {
                 generatedCode = VoucherUtils.generateRandomCode(8);
             } while (voucherRepository.existsByCode(generatedCode));
-            
             voucher.setCode(generatedCode);
+            System.out.println("2. Sinh mã tự động: " + voucher.getCode());
         } else {
-            // Trường hợp Admin tự nhập (VD: SALE50)
-            // Kiểm tra trùng
             if (voucherRepository.existsByCode(voucher.getCode())) {
                 throw new RuntimeException("Mã voucher '" + voucher.getCode() + "' đã tồn tại!");
             }
-            // Luôn convert sang chữ hoa để tránh user nhập sale50 bị lỗi
             voucher.setCode(voucher.getCode().toUpperCase().trim());
+            System.out.println("2. Dùng mã tự nhập: " + voucher.getCode());
         }
 
-        // Logic 2: Default Active
         if(voucher.getIsActive() == null) voucher.setIsActive(true);
         
-        return voucherRepository.save(voucher);
+        System.out.println("3. Tiến hành lưu DB...");
+        VoucherEntity savedVoucher = voucherRepository.save(voucher);
+        System.out.println("4. Đã lưu DB thành công. ID: " + savedVoucher.getId() + " | Active: " + savedVoucher.getIsActive());
+
+        // KHOANH VÙNG ĐIỀU KIỆN GỬI REAL-TIME
+        boolean isNotExpired = savedVoucher.getEndDate() == null || !LocalDate.now().isAfter(savedVoucher.getEndDate());
+        System.out.println("5. Kiểm tra điều kiện gửi WS -> isNotExpired: " + isNotExpired + " | isActive: " + savedVoucher.getIsActive());
+
+        if (savedVoucher.getIsActive() && isNotExpired) {
+            System.out.println("6. THỎA MÃN ĐIỀU KIỆN -> ĐANG GỬI TIN NHẮN TỚI KÊNH: /topic/public/vouchers");
+            try {
+                notificationService.sendPublicNotification("/vouchers", savedVoucher);
+                System.out.println("7. GỬI TIN NHẮN WEBSOCKET THÀNH CÔNG!");
+            } catch (Exception e) {
+                System.out.println("❌ LỖI KHI GỬI WEBSOCKET: " + e.getMessage());
+            }
+        } else {
+            System.out.println("6. BỎ QUA GỬI WEBSOCKET (Do chưa thỏa mãn điều kiện Active/Hạn sử dụng)");
+        }
+        
+        System.out.println("==========================================");
+        return savedVoucher;
     }
 
-    // Cập nhật
+    // Sửa lại hàm updateVoucher trong VoucherService.java
     @Transactional
     public VoucherEntity updateVoucher(Long id, VoucherEntity dto) {
+        System.out.println("========== DEBUG UPDATE VOUCHER ==========");
         VoucherEntity existing = voucherRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Voucher không tồn tại"));
 
-        // Chỉ cho phép update các thông tin cấu hình, KHÔNG cho sửa Code để đảm bảo toàn vẹn dữ liệu cũ
         existing.setDescription(dto.getDescription());
         existing.setDiscountType(dto.getDiscountType());
         existing.setDiscountValue(dto.getDiscountValue());
@@ -105,28 +124,68 @@ public class VoucherService {
         existing.setEndDate(dto.getEndDate());
         existing.setIsActive(dto.getIsActive());
 
-        return voucherRepository.save(existing);
+        VoucherEntity savedVoucher = voucherRepository.save(existing);
+
+        // LOGIC BẮN WEBSOCKET TƯƠNG TỰ CREATE
+        boolean isNotExpired = savedVoucher.getEndDate() == null || !LocalDate.now().isAfter(savedVoucher.getEndDate());
+        if (savedVoucher.getIsActive() && isNotExpired) {
+            System.out.println("-> Đã Cập nhật Voucher hợp lệ, đang gửi tới kênh: /topic/public/vouchers");
+            try {
+                notificationService.sendPublicNotification("/vouchers", savedVoucher);
+            } catch (Exception e) {
+                System.out.println("❌ LỖI GỬI WS: " + e.getMessage());
+            }
+        }
+        
+        return savedVoucher;
     }
 
-    // Xóa mềm (Toggle Active)
+    // Xóa mềm (Khóa/Vô hiệu hóa Voucher)
     @Transactional
     public void deleteVoucher(Long id) {
-        VoucherEntity voucher = voucherRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Voucher không tồn tại"));
-        // Ở đây tôi chọn Soft Delete (Ẩn đi) để giữ lịch sử đơn hàng
-        voucher.setIsActive(false); 
-        voucherRepository.save(voucher);
-    }
-
-    // khôi phục
-    @Transactional
-    public void restoreVoucher(Long id) {
+        System.out.println("========== DEBUG DELETE VOUCHER ==========");
         VoucherEntity voucher = voucherRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Voucher không tồn tại"));
         
-        // Logic khôi phục
+        // 1. Soft Delete (Ẩn đi)
+        voucher.setIsActive(false); 
+        VoucherEntity savedVoucher = voucherRepository.save(voucher);
+
+        // 2. Bắn thông báo Real-time để Frontend gỡ voucher này khỏi màn hình User
+        System.out.println("-> Đã khóa Voucher ID: " + id + ", đang gửi tới kênh: /topic/public/vouchers để cập nhật UI");
+        try {
+            // Gửi toàn bộ object (lúc này isActive = false). Frontend tự bắt logic để ẩn đi.
+            notificationService.sendPublicNotification("/vouchers", savedVoucher);
+        } catch (Exception e) {
+            System.out.println("❌ LỖI GỬI WS (DELETE): " + e.getMessage());
+        }
+        System.out.println("==========================================");
+    }
+
+    // Khôi phục (Mở khóa Voucher)
+    @Transactional
+    public void restoreVoucher(Long id) {
+        System.out.println("========== DEBUG RESTORE VOUCHER ==========");
+        VoucherEntity voucher = voucherRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Voucher không tồn tại"));
+        
+        // 1. Logic khôi phục
         voucher.setIsActive(true);
-        voucherRepository.save(voucher);
+        VoucherEntity savedVoucher = voucherRepository.save(voucher);
+
+        // 2. Logic bắn WebSocket (Chỉ gửi nếu voucher này chưa hết hạn)
+        boolean isNotExpired = savedVoucher.getEndDate() == null || !LocalDate.now().isAfter(savedVoucher.getEndDate());
+        if (isNotExpired) {
+            System.out.println("-> Đã khôi phục Voucher ID: " + id + " hợp lệ, đang gửi tới kênh: /topic/public/vouchers");
+            try {
+                notificationService.sendPublicNotification("/vouchers", savedVoucher);
+            } catch (Exception e) {
+                System.out.println("❌ LỖI GỬI WS (RESTORE): " + e.getMessage());
+            }
+        } else {
+            System.out.println("-> Voucher đã khôi phục nhưng ĐÃ HẾT HẠN, bỏ qua gửi WebSocket cho User.");
+        }
+        System.out.println("===========================================");
     }
 
     // =============================

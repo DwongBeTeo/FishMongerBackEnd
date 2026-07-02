@@ -146,11 +146,6 @@ public class BlogPostService {
 
         // Logic khôi phục:
         post.setIsDeleted(false);
-        
-        // LƯU Ý QUAN TRỌNG: 
-        // Khi khôi phục, nên để isActive = false (về dạng Nháp/Draft).
-        // Để Admin kiểm tra lại nội dung rồi mới bấm "Hiện" thủ công. 
-        // Tránh trường hợp bài cũ nội dung lỗi thời hiện ra làm khách hiểu nhầm.
         post.setIsActive(false); 
 
         blogPostRepository.save(post);
@@ -189,7 +184,7 @@ public class BlogPostService {
                 .categoryName(entity.getCategory().getName())
                 .viewCount(entity.getViewCount())
                 .createdBy(entity.getCreatedBy())
-                // .authorName(...) // Có thể gọi userRepo để lấy tên nếu cần
+                // .authorName(...) // Có thể gọi userRepo
                 .createdDate(entity.getCreatedDate())
                 .updatedDate(entity.getUpdatedDate())
                 .isActive(entity.getIsActive())

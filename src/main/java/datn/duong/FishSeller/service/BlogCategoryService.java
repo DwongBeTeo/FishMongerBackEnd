@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class BlogCategoryService {
 
     private final BlogCategoryRepository categoryRepository;
-    private final BlogPostRepository blogPostRepository; // Inject thêm repo bài viết
+    private final BlogPostRepository blogPostRepository;
     // USER
     // Chỉ trả về các danh mục đang hoạt động
     public List<BlogCategoryDTO> getPublicCategories() {
@@ -57,7 +57,6 @@ public class BlogCategoryService {
 
         existing.setName(dto.getName());
         existing.setDescription(dto.getDescription());
-        // Nếu muốn cho sửa slug thì uncomment dòng dưới
         existing.setSlug(SlugUtil.makeSlug(dto.getName())); 
         
         // Logic chặn ẩn nếu đang có bài viết

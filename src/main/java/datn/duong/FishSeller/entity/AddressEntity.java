@@ -14,7 +14,7 @@ public class AddressEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String recipientName; // Tên người nhận (VD: Anh A - Nhà riêng)
+    private String recipientName; // Tên người nhận
     private String phoneNumber;
     
     @Column(columnDefinition = "TEXT")

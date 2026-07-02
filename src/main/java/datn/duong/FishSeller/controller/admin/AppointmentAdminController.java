@@ -25,7 +25,7 @@ public class AppointmentAdminController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        // SECURITY CHECK: không cho phép lấy quá 10 sản phẩm(tránh bị tấn công thông qua postman)\
+        // SECURITY CHECK: không cho phép lấy quá 10 sản phẩm
         if (size > 10) {
             size = 10;
         }
@@ -42,7 +42,7 @@ public class AppointmentAdminController {
         return ResponseEntity.ok(appointmentService.assignEmployee(id, employeeId));
     }
 
-    // 3. Cập nhật trạng thái (VD: Hoàn thành, Đang làm)
+    // 3. Cập nhật trạng thái
     // URL: PATCH /admin/appointments/{id}/status?status=COMPLETED
     @PatchMapping("/{id}/status")
     public ResponseEntity<AppointmentDTO> updateStatus(

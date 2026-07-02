@@ -38,7 +38,6 @@ public class ProductController {
         return ResponseEntity.ok(productService.getProductDetailByStatus(id, "AVAILABLE"));
     }
 
-    // [MỚI - RẤT QUAN TRỌNG] 2b. Xem chi tiết theo SLUG
     // Frontend sẽ gọi: /products/slug/ca-koi-nhat-ban
     @GetMapping("/slug/{slug}")
     public ResponseEntity<ProductDTO> getProductDetailBySlug(@PathVariable String slug) {

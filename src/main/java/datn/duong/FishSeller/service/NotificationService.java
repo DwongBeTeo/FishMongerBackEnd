@@ -23,7 +23,7 @@ public class NotificationService {
     }
 
     // --- GỬI CHO TẤT CẢ ADMIN ---
-    // Admin sẽ lắng nghe tại các topic: /topic/admin/orders hoặc /topic/admin/appointments
+    // Admin lắng nghe các topic: /topic/admin/orders or /topic/admin/appointments
     public void sendAdminNotification(String destination, Object payload) {
         messagingTemplate.convertAndSend("/topic/admin" + destination, payload);
     }

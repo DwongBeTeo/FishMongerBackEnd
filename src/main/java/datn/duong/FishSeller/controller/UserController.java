@@ -113,8 +113,6 @@ public class UserController {
             userService.requestPasswordReset(request.getEmail());
             return ResponseEntity.ok("Link đặt lại mật khẩu đã được gửi vào email của bạn");
         } catch (Exception e) {
-            // Lưu ý: Về mặt bảo mật, đôi khi người ta luôn trả về OK dù email không tồn tại 
-            // để tránh hacker dò email. Nhưng với đồ án, trả về lỗi để dễ debug cũng được.
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

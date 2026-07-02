@@ -27,6 +27,7 @@ public class CategoryDTO extends BaseDTO {
     private String slug;
     private String metaTitle;
     private String metaKeyword;
+    private String imageUrl;
     // @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     // private LocalDateTime createdDate;
 

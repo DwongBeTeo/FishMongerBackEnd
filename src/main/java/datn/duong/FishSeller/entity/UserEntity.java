@@ -42,15 +42,16 @@ public class UserEntity extends BaseEntity {
     private String profileImageUrl;
 
     @Column(name = "is_active")
-    private Boolean isActive;
+    @Builder.Default
+    private Boolean isActive = false;
     private String activationToken;
 
-    @PrePersist
-    public void prePersist() {
-        if (this.isActive == null) {
-            isActive = false;
-        }
-    }
+    // @PrePersist
+    // public void prePersist() {
+    //     if (this.isActive == null) {
+    //         isActive = false;
+    //     }
+    // }
 
     // --- Mối quan hệ N-1 với Role ---
     @ManyToOne

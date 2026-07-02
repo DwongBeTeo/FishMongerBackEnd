@@ -24,7 +24,7 @@ public class BlogAdminController {
 
     @GetMapping("/categories")
     public ResponseEntity<List<BlogCategoryDTO>> getCategories() {
-        //phần này lấy các danh mục không bị xóa
+        // lấy các danh mục không bị xóa
         return ResponseEntity.ok(categoryService.getAllCategories());
     }
 
